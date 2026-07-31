@@ -11,6 +11,7 @@ h3 { font-size: 1.1rem; }
 .eyebrow, .label, small, .section-heading p { color: #93a1c6; font-size: .78rem; letter-spacing: .06em; }
 .live-indicator { color: #9de8c5; font-size: .9rem; }
 .live-indicator span { display: inline-block; width: 8px; height: 8px; margin-right: 6px; border-radius: 50%; background: #39d98a; box-shadow: 0 0 10px #39d98a; }
+.live-indicator.stale { color: #ffb4b9; }.live-indicator.stale span { background: #ff6572; box-shadow: 0 0 10px #ff6572; }
 section { margin-top: 32px; }
 .section-heading { margin-bottom: 12px; }
 .checkpoint-grid, .market-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 12px; }
@@ -24,4 +25,3 @@ section { margin-top: 32px; }
 .positive { color: #80f0b7; }.negative { color: #ff9ba1; }
 .runs-section { margin-top: 32px; }.table-wrap { overflow-x: auto; }table { width: 100%; border-collapse: collapse; min-width: 600px; }th, td { padding: 13px 16px; text-align: left; border-bottom: 1px solid #26335a; font-size: .85rem; }th { color: #93a1c6; font-weight: 500; }.empty { color: #93a1c6; }
 @media (max-width: 600px) { .container { padding: 24px 16px; }.page-header { align-items: flex-start; flex-direction: column; margin-bottom: 28px; } }
-

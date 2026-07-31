@@ -10,6 +10,11 @@
 | Missing candles / hour | 최근 완료된 60개 1분봉 중 비어 있는 수 | 데이터 연속성 계약을 운영자가 확인한다. |
 | Backfill result | 복구 범위·처리 행 수·성공 여부 | 장애 후 복구가 실제로 수행됐는지 추적한다. |
 
+`LIVE`는 DB에 마지막으로 기록된 상태값만 뜻하지 않는다. Dashboard 조회 시 마지막 Binance
+이벤트가 15초를 초과하면 `STALE`로 파생해, ETL 컨테이너가 중지된 경우에도 운영 화면에서
+실시간 수집 중단을 구분한다. `Recent recovery runs`의 `SUCCESS`는 과거 Backfill의 성공 기록이며,
+현재 수집기의 정상 상태를 의미하지 않는다.
+
 ## Market context
 
 | Metric | Definition | Reason |
@@ -20,4 +25,3 @@
 
 Aggregate Trade는 향후 최근 체결·taker flow 테이블을 위한 원본 데이터로 유지한다.
 체결 이벤트의 buyer-maker 플래그는 taker 방향을 파생할 때만 사용하며, 투자 신호로 해석하지 않는다.
-

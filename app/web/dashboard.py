@@ -9,6 +9,7 @@ from app.core.models import AggregateTrade, IngestionCheckpoint, IngestionRun, M
 
 ONE_MINUTE_MS = 60_000
 RECENT_COMPLETED_CANDLE_WINDOW = 60
+STALE_EVENT_THRESHOLD_SECONDS = 15
 
 
 def _number(value: Decimal | None) -> float | None:
@@ -27,10 +28,23 @@ def count_missing_completed_minutes(
     )
 
 
+def derive_checkpoint_status(
+    reported_status: str, last_event_time: int | None, now_ms: int
+) -> tuple[str, int | None]:
+    """Derive the current operational state from persisted heartbeat age."""
+    if last_event_time is None:
+        return ("STARTING", None)
+
+    event_age_seconds = max(0, (now_ms - last_event_time) // 1000)
+    if reported_status == "LIVE" and event_age_seconds > STALE_EVENT_THRESHOLD_SECONDS:
+        return ("STALE", event_age_seconds)
+    return (reported_status, event_age_seconds)
+
+
 async def build_dashboard(session: AsyncSession, symbols: tuple[str, ...]) -> dict[str, object]:
     now_ms = int(time.time() * 1000)
     markets = [await _market_summary(session, symbol, now_ms) for symbol in symbols]
-    checkpoints = await _checkpoints(session)
+    checkpoints = await _checkpoints(session, now_ms)
     runs = await _recent_runs(session)
     return {
         "generated_at": datetime.now(UTC).isoformat(),
@@ -134,26 +148,33 @@ async def _market_summary(session: AsyncSession, symbol: str, now_ms: int) -> di
     }
 
 
-async def _checkpoints(session: AsyncSession) -> list[dict[str, object]]:
+async def _checkpoints(session: AsyncSession, now_ms: int) -> list[dict[str, object]]:
     statement = select(IngestionCheckpoint).order_by(
         IngestionCheckpoint.symbol, IngestionCheckpoint.source
     )
     checkpoints = (await session.scalars(statement)).all()
-    return [
-        {
-            "symbol": checkpoint.symbol,
-            "source": checkpoint.source,
-            "status": checkpoint.connection_status,
-            "last_event_time": checkpoint.last_event_time,
-            "last_persisted_at": checkpoint.last_persisted_at.isoformat()
-            if checkpoint.last_persisted_at
-            else None,
-            "last_error": checkpoint.last_error,
-            "reconnect_count": checkpoint.reconnect_count,
-            "updated_at": checkpoint.updated_at.isoformat() if checkpoint.updated_at else None,
-        }
-        for checkpoint in checkpoints
-    ]
+    result = []
+    for checkpoint in checkpoints:
+        status, event_age_seconds = derive_checkpoint_status(
+            checkpoint.connection_status, checkpoint.last_event_time, now_ms
+        )
+        result.append(
+            {
+                "symbol": checkpoint.symbol,
+                "source": checkpoint.source,
+                "status": status,
+                "reported_status": checkpoint.connection_status,
+                "last_event_time": checkpoint.last_event_time,
+                "event_age_seconds": event_age_seconds,
+                "last_persisted_at": checkpoint.last_persisted_at.isoformat()
+                if checkpoint.last_persisted_at
+                else None,
+                "last_error": checkpoint.last_error,
+                "reconnect_count": checkpoint.reconnect_count,
+                "updated_at": checkpoint.updated_at.isoformat() if checkpoint.updated_at else None,
+            }
+        )
+    return result
 
 
 async def _recent_runs(session: AsyncSession) -> list[dict[str, object]]:

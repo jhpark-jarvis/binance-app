@@ -3,16 +3,21 @@ const formatNumber = new Intl.NumberFormat("en-US", { maximumFractionDigits: 4 }
 
 function statusClass(status) {
   return status === "LIVE" || status === "RECOVERED" || status === "SUCCESS" ? "ok" :
-    status === "RECONNECTING" ? "warn" : "error";
+    status === "RECONNECTING" || status === "STARTING" ? "warn" : "error";
 }
 
 function render(data) {
   document.getElementById("generated-at").textContent = `Last query: ${new Date(data.generated_at).toLocaleString()}`;
+  const streamStatus = document.getElementById("stream-status");
+  const hasCheckpoints = data.checkpoints.length > 0;
+  const isLive = hasCheckpoints && data.checkpoints.every((item) => item.status === "LIVE");
+  streamStatus.classList.toggle("stale", hasCheckpoints && !isLive);
+  streamStatus.innerHTML = `<span></span>${isLive ? "실시간 이벤트 수신 중" : hasCheckpoints ? "실시간 이벤트 수신 중단" : "수집기 상태 확인 중"}`;
   document.getElementById("checkpoints").innerHTML = data.checkpoints.map((item) => `
     <article class="checkpoint-card">
       <div><span class="label">${item.symbol} · ${item.source}</span><span class="badge ${statusClass(item.status)}">${item.status}</span></div>
       <strong>${item.last_event_time ? new Date(item.last_event_time).toLocaleTimeString() : "No event"}</strong>
-      <small>Reconnects ${item.reconnect_count}</small>
+      <small>${item.event_age_seconds === null ? "이벤트 대기 중" : `${item.event_age_seconds}s 전 수신`} · 재연결 ${item.reconnect_count}</small>
     </article>`).join("") || '<p class="empty">Waiting for ETL checkpoints…</p>';
 
   document.getElementById("markets").innerHTML = data.markets.map((market) => `
@@ -36,4 +41,3 @@ const stream = new EventSource("/events");
 stream.onmessage = () => refresh();
 stream.onerror = () => setTimeout(refresh, 1500);
 setInterval(refresh, 15000);
-

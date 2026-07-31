@@ -2,7 +2,12 @@ from decimal import Decimal
 
 from app.etl.repository import deduplicate_candles
 from app.etl.types import Candle
-from app.web.dashboard import ONE_MINUTE_MS, count_missing_completed_minutes
+from app.web.dashboard import (
+    ONE_MINUTE_MS,
+    STALE_EVENT_THRESHOLD_SECONDS,
+    count_missing_completed_minutes,
+    derive_checkpoint_status,
+)
 
 
 def _candle(close_price: str, event_time: int) -> Candle:
@@ -38,3 +43,13 @@ def test_missing_candle_count_uses_only_completed_candle_window() -> None:
     closed_open_times = {last_completed - offset * ONE_MINUTE_MS for offset in range(60)}
 
     assert count_missing_completed_minutes(closed_open_times, last_completed) == 0
+
+
+def test_live_checkpoint_becomes_stale_when_heartbeat_is_old() -> None:
+    now_ms = 1_710_000_000_000
+    status, age_seconds = derive_checkpoint_status(
+        "LIVE", now_ms - (STALE_EVENT_THRESHOLD_SECONDS + 1) * 1000, now_ms
+    )
+
+    assert status == "STALE"
+    assert age_seconds == STALE_EVENT_THRESHOLD_SECONDS + 1

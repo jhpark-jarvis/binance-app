@@ -143,6 +143,17 @@ docker compose logs -f etl web
 초기 Backfill 또는 연결 복구 중에는 일시적으로 `RECOVERED` 또는 `RECONNECTING` 상태가
 표시될 수 있습니다.
 
+| 상태 | 의미 | 운영자 조치 |
+|---|---|---|
+| `LIVE` | 마지막 Binance 이벤트가 15초 이내에 수신됨 | 정상 감시 |
+| `STALE` | ETL이 중지됐거나 마지막 이벤트가 15초를 초과함 | ETL 상태·로그 확인 후 재시작 |
+| `RECONNECTING` | ETL이 Binance 연결을 재시도 중 | 재시도·Backfill 결과 확인 |
+| `FAILED` | Backfill 또는 연결 처리 실패가 기록됨 | ETL 로그와 Binance API 접근 확인 |
+
+헤더의 `실시간 이벤트 수신 중`도 모든 checkpoint가 `LIVE`일 때만 표시됩니다. 과거
+`Recent recovery runs`의 `SUCCESS`는 마지막 Backfill이 성공했다는 이력일 뿐, 현재 ETL이
+실행 중이라는 뜻은 아닙니다.
+
 ### 상태 API 확인
 
 브라우저 대신 터미널에서도 상태를 확인할 수 있습니다.
