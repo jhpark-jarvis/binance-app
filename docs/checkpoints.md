@@ -7,10 +7,10 @@
 | C0 | 요구사항·규칙 확정 | 범위, 비목표, 완료 기준, Agent/commit 규칙 문서화 | 완료 |
 | C1 | 실행 기반 | Python 의존성, Docker Compose, PostgreSQL·Redis, Alembic 구성 | 완료 |
 | C2 | 데이터 모델 | 캔들·체결·체크포인트·수집 이력 schema와 유니크 키 적용 | 완료 |
-| C3 | 최초 Backfill | 빈 DB에서 설정 기간의 완료 1분봉을 저장 | 구현 완료, 컨테이너 검증 대기 |
-| C4 | 실시간 수집 | Binance WebSocket 이벤트 저장 및 Redis 전달 | 구현 완료, 컨테이너 검증 대기 |
-| C5 | 재연결·복구 | 연결/프로세스 중단 뒤 누락 구간 Backfill 및 상태 기록 | 구현 완료, 통합 검증 대기 |
-| C6 | 운영 Dashboard | 상태·지연·누락·백필 이력의 서버 렌더링 화면과 API | 구현 완료, 통합 검증 대기 |
+| C3 | 최초 Backfill | 빈 DB에서 설정 기간의 완료 1분봉을 저장 | 검증 완료 |
+| C4 | 실시간 수집 | Binance WebSocket 이벤트 저장 및 Redis 전달 | 검증 완료 |
+| C5 | 재연결·복구 | 연결/프로세스 중단 뒤 누락 구간 Backfill 및 상태 기록 | 예외 후 자동 복구 검증 완료, 의도적 중단 시나리오 대기 |
+| C6 | 운영 Dashboard | 상태·지연·누락·백필 이력의 서버 렌더링 화면과 API | 검증 완료 |
 | C7 | 품질 검증 | lint, test, Docker 기동, 강제 중지 복구 시나리오 증적 | 진행 중 |
 | C8 | 최종 문서화 | README·지표·AI 사용·검증 결과 최신화 | 진행 중 |
 
@@ -34,4 +34,3 @@
 1. ETL의 네트워크 연결 또는 WebSocket을 강제로 종료한다.
 2. Dashboard에서 `RECONNECTING` 상태와 reconnect count 증가를 확인한다.
 3. 재연결 뒤 `LIVE` 상태, Backfill 성공, 데이터 갱신을 확인한다.
-

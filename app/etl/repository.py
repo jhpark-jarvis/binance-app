@@ -9,6 +9,14 @@ from app.core.models import AggregateTrade, IngestionCheckpoint, IngestionRun, M
 from app.etl.types import Candle, Trade
 
 
+def deduplicate_candles(candles: Iterable[Candle]) -> list[Candle]:
+    """Keep the final update for each candle identity within an insert batch."""
+    deduplicated = {
+        (candle.symbol, candle.interval, candle.open_time): candle for candle in candles
+    }
+    return list(deduplicated.values())
+
+
 class MarketRepository:
     async def latest_closed_candle(
         self, session: AsyncSession, symbol: str, interval: str
@@ -33,6 +41,10 @@ class MarketRepository:
         return set((await session.scalars(statement)).all())
 
     async def upsert_candles(self, session: AsyncSession, candles: Iterable[Candle]) -> None:
+        # A WebSocket batch can include several updates for the same open candle.
+        # PostgreSQL rejects duplicate conflict targets within one INSERT statement,
+        # so retain only the final (newest) update for each candle identity.
+        deduplicated = deduplicate_candles(candles)
         rows = [
             {
                 "symbol": candle.symbol,
@@ -49,7 +61,7 @@ class MarketRepository:
                 "is_closed": candle.is_closed,
                 "source_event_time": candle.source_event_time,
             }
-            for candle in candles
+            for candle in deduplicated
         ]
         if not rows:
             return

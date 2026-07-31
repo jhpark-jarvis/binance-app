@@ -8,10 +8,23 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.models import AggregateTrade, IngestionCheckpoint, IngestionRun, MarketCandle
 
 ONE_MINUTE_MS = 60_000
+RECENT_COMPLETED_CANDLE_WINDOW = 60
 
 
 def _number(value: Decimal | None) -> float | None:
     return float(value) if value is not None else None
+
+
+def count_missing_completed_minutes(
+    closed_open_times: set[int],
+    last_completed_open: int,
+    window: int = RECENT_COMPLETED_CANDLE_WINDOW,
+) -> int:
+    expected_start = last_completed_open - (window - 1) * ONE_MINUTE_MS
+    return sum(
+        minute not in closed_open_times
+        for minute in range(expected_start, last_completed_open + ONE_MINUTE_MS, ONE_MINUTE_MS)
+    )
 
 
 async def build_dashboard(session: AsyncSession, symbols: tuple[str, ...]) -> dict[str, object]:
@@ -69,13 +82,17 @@ async def _market_summary(session: AsyncSession, symbol: str, now_ms: int) -> di
         .limit(60)
     )
     candles = list(reversed((await session.scalars(candles_statement)).all()))
-    closed_opens = {candle.open_time for candle in candles if candle.is_closed}
     last_completed_open = (now_ms // ONE_MINUTE_MS - 1) * ONE_MINUTE_MS
-    expected_start = last_completed_open - 59 * ONE_MINUTE_MS
-    missing_last_hour = sum(
-        minute not in closed_opens
-        for minute in range(expected_start, last_completed_open + ONE_MINUTE_MS, ONE_MINUTE_MS)
+    expected_start = last_completed_open - (RECENT_COMPLETED_CANDLE_WINDOW - 1) * ONE_MINUTE_MS
+    closed_coverage_statement = select(MarketCandle.open_time).where(
+        MarketCandle.symbol == symbol,
+        MarketCandle.interval == "1m",
+        MarketCandle.is_closed.is_(True),
+        MarketCandle.open_time >= expected_start,
+        MarketCandle.open_time <= last_completed_open,
     )
+    closed_opens = set((await session.scalars(closed_coverage_statement)).all())
+    missing_last_hour = count_missing_completed_minutes(closed_opens, last_completed_open)
 
     trades_statement = (
         select(AggregateTrade)
