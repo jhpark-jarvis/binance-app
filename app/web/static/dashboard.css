@@ -1,0 +1,27 @@
+:root { color-scheme: dark; font-family: Inter, ui-sans-serif, system-ui, sans-serif; background: #0b1020; color: #e7ecfa; }
+* { box-sizing: border-box; }
+body { margin: 0; }
+.container { max-width: 1180px; margin: 0 auto; padding: 40px 24px 64px; }
+.page-header, .section-heading, .card-title, .market-meta, .checkpoint-card > div { display: flex; justify-content: space-between; align-items: center; gap: 16px; }
+.page-header { margin-bottom: 40px; }
+h1, h2, h3, p { margin: 0; }
+h1 { font-size: clamp(1.7rem, 4vw, 2.6rem); letter-spacing: -0.04em; }
+h2 { font-size: 1rem; }
+h3 { font-size: 1.1rem; }
+.eyebrow, .label, small, .section-heading p { color: #93a1c6; font-size: .78rem; letter-spacing: .06em; }
+.live-indicator { color: #9de8c5; font-size: .9rem; }
+.live-indicator span { display: inline-block; width: 8px; height: 8px; margin-right: 6px; border-radius: 50%; background: #39d98a; box-shadow: 0 0 10px #39d98a; }
+section { margin-top: 32px; }
+.section-heading { margin-bottom: 12px; }
+.checkpoint-grid, .market-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 12px; }
+.checkpoint-card, .market-card, .table-wrap { border: 1px solid #26335a; background: linear-gradient(135deg, #111936, #0d142b); border-radius: 12px; }
+.checkpoint-card, .market-card { padding: 18px; }
+.checkpoint-card strong { display: block; margin: 14px 0 6px; font-variant-numeric: tabular-nums; }
+.price { margin: 22px 0 14px; font-size: 1.8rem; font-weight: 700; letter-spacing: -.04em; font-variant-numeric: tabular-nums; }
+.market-meta { color: #aeb9d8; font-size: .85rem; }
+.badge { display: inline-block; border-radius: 999px; padding: 4px 8px; font-size: .67rem; font-weight: 700; letter-spacing: .04em; }
+.ok { color: #80f0b7; background: #123b2b; }.warn { color: #ffce72; background: #443515; }.error { color: #ff9ba1; background: #431f2b; }
+.positive { color: #80f0b7; }.negative { color: #ff9ba1; }
+.runs-section { margin-top: 32px; }.table-wrap { overflow-x: auto; }table { width: 100%; border-collapse: collapse; min-width: 600px; }th, td { padding: 13px 16px; text-align: left; border-bottom: 1px solid #26335a; font-size: .85rem; }th { color: #93a1c6; font-weight: 500; }.empty { color: #93a1c6; }
+@media (max-width: 600px) { .container { padding: 24px 16px; }.page-header { align-items: flex-start; flex-direction: column; margin-bottom: 28px; } }
+

@@ -1,0 +1,1 @@
+"""Long-running ingestion daemon."""

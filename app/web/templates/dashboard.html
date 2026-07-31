@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Binance Operations Dashboard</title>
+    <link rel="stylesheet" href="{{ url_for('static', path='dashboard.css') }}" />
+  </head>
+  <body>
+    <main class="container">
+      <header class="page-header">
+        <div>
+          <p class="eyebrow">BINANCE SPOT · INTERNAL OPERATIONS</p>
+          <h1>Market Data Operations</h1>
+        </div>
+        <div class="live-indicator"><span></span> Live event stream</div>
+      </header>
+
+      <section aria-labelledby="pipeline-title">
+        <div class="section-heading">
+          <h2 id="pipeline-title">Pipeline health</h2>
+          <p id="generated-at">Last query: {{ dashboard.generated_at }}</p>
+        </div>
+        <div id="checkpoints" class="checkpoint-grid"></div>
+      </section>
+
+      <section aria-labelledby="market-title">
+        <div class="section-heading"><h2 id="market-title">Market status</h2></div>
+        <div id="markets" class="market-grid"></div>
+      </section>
+
+      <section class="runs-section" aria-labelledby="backfill-title">
+        <div class="section-heading"><h2 id="backfill-title">Recent recovery runs</h2></div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Symbol</th><th>Type</th><th>Status</th><th>Rows</th><th>Started</th></tr></thead>
+            <tbody id="runs"></tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+    <script>window.__INITIAL_DASHBOARD__ = {{ dashboard_json | safe }};</script>
+    <script src="{{ url_for('static', path='dashboard.js') }}"></script>
+  </body>
+</html>
+
