@@ -32,6 +32,7 @@ Aggregate Trade는 향후 최근 체결·taker flow 테이블을 위한 원본 �
 |---|---|---|
 | 1-minute candlestick | PostgreSQL에 저장된 실제 1분봉 OHLC. 진행 중인 현재 봉은 점선으로 구분 | 최신 가격뿐 아니라 시간축의 연속성과 봉 갱신을 함께 본다. |
 | Volume bars | 동일한 1분봉의 거래량 | 가격 변화 시 수집된 거래량이 함께 갱신되는지 확인한다. |
+| Candle hover tooltip | 표시 중인 캔들의 시가·고가·저가·종가·거래량과 완료 여부 | 개별 시점의 실제 값을 확인하고, 누락 구간을 보간하지 않았는지 검증한다. |
 | Missing completed-minute shading | 선택 구간에서 완료돼야 했지만 DB에 없는 1분봉 | 없는 데이터를 보간하지 않고, 복구가 필요한 실제 공백을 눈에 띄게 만든다. |
 | Recent trades | Aggregate Trade의 최근 12개 체결 | 캔들 갱신 외에도 실시간 체결 흐름이 들어오는지 확인한다. |
 | Recovery history | 선택 종목의 최근 Backfill 실행 | 시각적 공백과 복구 이력을 같은 종목 맥락에서 확인한다. |

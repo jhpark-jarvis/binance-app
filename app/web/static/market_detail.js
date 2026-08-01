@@ -6,9 +6,18 @@ const ranges = { "1h": "1시간", "6h": "6시간", "24h": "24시간", "7d": "7�
 let detail = window.__INITIAL_DETAIL__;
 let refreshTimer = null;
 let refreshInFlight = false;
+let candleChartState = null;
+let hoverX = null;
 
 function formatTime(value) {
   return value ? new Date(value).toLocaleTimeString() : "-";
+}
+
+function formatCandleTime(value) {
+  return new Intl.DateTimeFormat("ko-KR", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(new Date(value));
 }
 
 function resizeCanvas(canvas) {
@@ -24,7 +33,9 @@ function resizeCanvas(canvas) {
 }
 
 function compactCandles(candles, maxCount) {
-  if (candles.length <= maxCount) return candles;
+  if (candles.length <= maxCount) {
+    return candles.map((candle) => ({ ...candle, sample_count: 1 }));
+  }
   const step = Math.ceil(candles.length / maxCount);
   const compacted = [];
   for (let index = 0; index < candles.length; index += step) {
@@ -37,6 +48,7 @@ function compactCandles(candles, maxCount) {
       close: group.at(-1).close,
       volume: group.reduce((sum, item) => sum + item.volume, 0),
       closed: group.every((item) => item.closed),
+      sample_count: group.length,
     });
   }
   return compacted;
@@ -45,6 +57,74 @@ function compactCandles(candles, maxCount) {
 function xForTime(time, detailData, width, left, right) {
   const duration = detailData.range_end - detailData.range_start + ONE_MINUTE_MS;
   return left + ((time - detailData.range_start) / duration) * (width - left - right);
+}
+
+function candleDuration(candle) {
+  return (candle.sample_count || 1) * ONE_MINUTE_MS;
+}
+
+function xForCandle(candle, detailData, width, left, right) {
+  return xForTime(candle.time + candleDuration(candle) / 2, detailData, width, left, right);
+}
+
+function hideCandleTooltip() {
+  hoverX = null;
+  document.getElementById("candle-tooltip").hidden = true;
+}
+
+function drawCandleHover(pointerX) {
+  const state = candleChartState;
+  if (!state) return;
+
+  const x = Math.min(state.width - state.right, Math.max(state.left, pointerX));
+  const duration = detail.range_end - detail.range_start + ONE_MINUTE_MS;
+  const hoveredOpenTime = Math.floor(
+    (detail.range_start + ((x - state.left) / state.chartWidth) * duration) / ONE_MINUTE_MS,
+  ) * ONE_MINUTE_MS;
+  const isMissing = state.missingTimes.has(hoveredOpenTime);
+  const candle = state.candles.reduce((closest, item) => {
+    const itemX = xForCandle(item, detail, state.width, state.left, state.right);
+    const closestX = xForCandle(closest, detail, state.width, state.left, state.right);
+    return Math.abs(itemX - x) < Math.abs(closestX - x) ? item : closest;
+  });
+  const crosshairX = isMissing
+    ? xForTime(hoveredOpenTime + ONE_MINUTE_MS / 2, detail, state.width, state.left, state.right)
+    : xForCandle(candle, detail, state.width, state.left, state.right);
+
+  state.context.save();
+  state.context.strokeStyle = isMissing ? "#ffb85b" : "rgba(202, 216, 255, .82)";
+  state.context.lineWidth = 1;
+  state.context.setLineDash([4, 4]);
+  state.context.beginPath();
+  state.context.moveTo(crosshairX, state.top);
+  state.context.lineTo(crosshairX, state.top + state.chartHeight);
+  state.context.stroke();
+  state.context.setLineDash([]);
+  if (!isMissing) {
+    state.context.fillStyle = candle.close >= candle.open ? "#39d98a" : "#ff6572";
+    state.context.beginPath();
+    state.context.arc(crosshairX, state.yForPrice(candle.close), 3.5, 0, Math.PI * 2);
+    state.context.fill();
+  }
+  state.context.restore();
+
+  const tooltip = document.getElementById("candle-tooltip");
+  if (isMissing) {
+    tooltip.textContent = `${formatCandleTime(hoveredOpenTime)}\n완료 1분봉 없음\n값을 보간하지 않은 복구 대상 구간`;
+  } else {
+    const sampleLabel = candle.sample_count > 1 ? `\n표시 단위: ${candle.sample_count}분 묶음` : "";
+    tooltip.textContent = `${formatCandleTime(candle.time)} · ${candle.closed ? "완료" : "진행 중"}\nO ${number.format(candle.open)}  H ${number.format(candle.high)}\nL ${number.format(candle.low)}  C ${number.format(candle.close)}\n거래량 ${number.format(candle.volume)}${sampleLabel}`;
+  }
+  tooltip.hidden = false;
+  const tooltipWidth = tooltip.offsetWidth;
+  const tooltipHeight = tooltip.offsetHeight;
+  const tooltipLeft = Math.min(state.width - tooltipWidth - 8, Math.max(8, crosshairX + 12));
+  const tooltipTop = Math.min(
+    state.height - tooltipHeight - 8,
+    Math.max(8, (isMissing ? state.top : state.yForPrice(candle.close)) - tooltipHeight / 2),
+  );
+  tooltip.style.left = `${tooltipLeft}px`;
+  tooltip.style.top = `${tooltipTop}px`;
 }
 
 function drawCandleChart() {
@@ -62,6 +142,8 @@ function drawCandleChart() {
   const chartHeight = height - top - bottom;
   const candles = compactCandles(detail.candles, Math.max(40, Math.floor(chartWidth / 3)));
   if (!candles.length) {
+    candleChartState = null;
+    hideCandleTooltip();
     context.fillStyle = "#93a1c6";
     context.font = "13px system-ui";
     context.fillText("선택한 구간에 저장된 캔들이 없습니다.", left, top + 24);
@@ -98,7 +180,7 @@ function drawCandleChart() {
 
   const candleWidth = Math.max(1, Math.min(10, chartWidth / candles.length * 0.65));
   candles.forEach((candle) => {
-    const x = xForTime(candle.time + ONE_MINUTE_MS / 2, detail, width, left, right);
+    const x = xForCandle(candle, detail, width, left, right);
     const rising = candle.close >= candle.open;
     const color = rising ? "#39d98a" : "#ff6572";
     context.strokeStyle = color;
@@ -117,6 +199,20 @@ function drawCandleChart() {
   context.fillText(formatTime(detail.range_start), left, height - 7);
   const endLabel = formatTime(detail.range_end);
   context.fillText(endLabel, width - right - context.measureText(endLabel).width, height - 7);
+  candleChartState = {
+    context,
+    width,
+    height,
+    left,
+    right,
+    top,
+    chartWidth,
+    chartHeight,
+    candles,
+    missingTimes: new Set(detail.missing_open_times),
+    yForPrice,
+  };
+  if (hoverX !== null) drawCandleHover(hoverX);
 }
 
 function drawVolumeChart() {
@@ -131,8 +227,8 @@ function drawVolumeChart() {
   const maxVolume = Math.max(...candles.map((item) => item.volume), 1);
   const baseline = height - 6;
   candles.forEach((candle) => {
-    const x = xForTime(candle.time + ONE_MINUTE_MS / 2, detail, width, left, right);
-    const nextX = xForTime(candle.time + ONE_MINUTE_MS, detail, width, left, right);
+    const x = xForCandle(candle, detail, width, left, right);
+    const nextX = xForTime(candle.time + candleDuration(candle), detail, width, left, right);
     const barWidth = Math.max(1, Math.min(10, nextX - x));
     const barHeight = (candle.volume / maxVolume) * (height - 12);
     context.fillStyle = candle.close >= candle.open ? "rgba(57, 217, 138, .55)" : "rgba(255, 101, 114, .55)";
@@ -193,6 +289,16 @@ function scheduleRefresh() {
 
 document.querySelectorAll(".range-button").forEach((button) => {
   button.addEventListener("click", () => loadHistory(button.dataset.window));
+});
+const candleChart = document.getElementById("candle-chart");
+candleChart.addEventListener("pointermove", (event) => {
+  const bounds = candleChart.getBoundingClientRect();
+  hoverX = event.clientX - bounds.left;
+  drawCandleChart();
+});
+candleChart.addEventListener("pointerleave", () => {
+  hideCandleTooltip();
+  drawCandleChart();
 });
 window.addEventListener("resize", render);
 const stream = new EventSource("/events");
