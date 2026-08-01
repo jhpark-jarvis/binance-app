@@ -155,7 +155,9 @@ function render() {
   document.getElementById("latest-price-time").textContent = detail.latest_price_time ? `마지막 이벤트 ${formatTime(detail.latest_price_time)}` : "수집 데이터 대기 중";
   document.getElementById("coverage-range").textContent = ranges[detail.window];
   document.getElementById("missing-count").textContent = `${detail.missing_open_times.length}개`;
-  document.getElementById("refresh-state").textContent = `갱신 ${new Date(detail.generated_at).toLocaleTimeString()}`;
+  const refreshState = document.getElementById("refresh-state");
+  refreshState.textContent = "실시간 수신 중";
+  refreshState.classList.remove("refresh-error");
   document.querySelectorAll(".range-button").forEach((button) => button.classList.toggle("active", button.dataset.window === detail.window));
   drawCandleChart();
   drawVolumeChart();
@@ -166,14 +168,15 @@ function render() {
 async function loadHistory(window = detail.window) {
   if (refreshInFlight) return;
   refreshInFlight = true;
-  document.getElementById("refresh-state").textContent = "데이터 갱신 중";
   try {
     const response = await fetch(`/api/markets/${detail.symbol}/history?window=${window}`);
     if (!response.ok) throw new Error("상세 데이터를 가져오지 못했습니다.");
     detail = await response.json();
     render();
   } catch (error) {
-    document.getElementById("refresh-state").textContent = "갱신 실패";
+    const refreshState = document.getElementById("refresh-state");
+    refreshState.textContent = "갱신 재시도 중";
+    refreshState.classList.add("refresh-error");
   } finally {
     refreshInFlight = false;
   }
