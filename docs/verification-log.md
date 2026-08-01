@@ -67,3 +67,26 @@ ETL을 중지한 상태에서 Dashboard가 `STALE`, 이벤트 지연 증가, 누
 
 이 결과로 최초 Backfill, 의도적 ETL 중단, 재시작 Backfill, 운영 상태의 `STALE → LIVE`
 전환을 실제 Docker 환경에서 검증했다.
+
+## 2026-08-01 — Redis AOF 손상 복구 및 서비스 재개 검증
+
+### Incident and recovery
+
+`docker compose start` 시 Redis가 `Bad file format reading the append only file`로 종료했다.
+진단 결과 `appendonly.aof.1.incr.aof`의 마지막 176 bytes가 불완전했다. PostgreSQL은 healthy
+상태였고, Redis는 영속 데이터 기준이 아니므로 PostgreSQL volume에는 변경을 가하지 않았다.
+
+원본 Redis volume을 `binance-app_redis_aof_backup_20260801_1118`에 먼저 복제한 후,
+`redis-check-aof --fix`로 원본 incremental AOF를 464,742 bytes에서 464,566 bytes로 정리했다.
+Redis 재기동 뒤 AOF 로드 완료와 `redis-cli ping`의 `PONG`을 확인했다.
+
+### Result after application restart
+
+- `postgres`, `redis`, `etl`, `web` 모두 running/healthy 상태로 복귀
+- ETL 재개 Backfill: BTCUSDT 17개, ETHUSDT 17개, 모두 `SUCCESS`
+- 네 checkpoint: 모두 `LIVE`, 이벤트 경과 시간 0초
+- Dashboard: 두 심볼 모두 `missing_last_hour = 0`, `lag_seconds = 0`
+- FastAPI `/health`: `{"status":"ok"}`
+
+Redis 복구는 WebSocket 강제 종료 시나리오를 대체하지 않는다. 해당 시나리오는 계속 별도 검증
+대상이다.

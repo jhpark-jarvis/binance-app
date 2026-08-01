@@ -316,6 +316,40 @@ docker compose logs --tail 150 postgres redis migrate web
 
 `migrate`가 `exited (0)`이 아닌 경우 DB schema 적용 실패 원인을 먼저 해결해야 합니다.
 
+### `redis`가 `Bad file format reading the append only file`로 종료됩니다
+
+비정상 종료 중 Redis AOF의 마지막 쓰기 일부가 손상된 경우입니다. 이 프로젝트에서 Redis는
+실시간 전달·짧은 캐시 용도이고 PostgreSQL이 영속 데이터의 기준이므로, **PostgreSQL volume은
+건드리지 않습니다.** 먼저 Redis volume을 별도 volume에 복제한 뒤 AOF를 복구합니다.
+
+아래의 `binance-app_redis_data`는 현재 기본 Compose 프로젝트명 기준입니다. 다른 프로젝트명을
+사용했다면 `docker volume ls`로 Redis volume의 실제 이름을 먼저 확인해 바꿉니다.
+
+```bash
+# 1) 원본 Redis volume 전체를 백업한다. 날짜·시간은 원하는 이름으로 바꾼다.
+docker volume create binance-app_redis_aof_backup_YYYYMMDD
+docker run --rm \
+  -v binance-app_redis_data:/from:ro \
+  -v binance-app_redis_aof_backup_YYYYMMDD:/to \
+  redis:8-alpine sh -c 'cp -a /from/. /to/'
+
+# 2) 백업을 보존한 원본에서만 손상된 AOF 꼬리를 정리한다.
+docker run --rm \
+  -v binance-app_redis_data:/data \
+  redis:8-alpine sh -c 'yes y | redis-check-aof --fix /data/appendonlydir/appendonly.aof.manifest'
+
+# 3) Redis와 의존 앱을 다시 시작하고 상태를 확인한다.
+docker compose start redis
+docker compose up -d etl web
+docker compose exec -T redis redis-cli ping
+docker compose ps
+```
+
+정상 복구 시 `PONG`이 출력됩니다. ETL이 다시 시작되면 PostgreSQL의 마지막 완료 캔들부터
+자동 Backfill하므로, Dashboard에서 `missing / hr = 0`, checkpoint `LIVE`를 확인합니다.
+`redis-check-aof --fix`는 손상된 마지막 명령을 버릴 수 있으므로 반드시 1단계 백업을 먼저
+수행해야 합니다.
+
 ### Dashboard에 데이터가 없거나 ETL이 계속 재연결됩니다
 
 ETL log를 확인합니다.
