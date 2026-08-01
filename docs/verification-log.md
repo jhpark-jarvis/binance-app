@@ -44,6 +44,26 @@ Dashboard의 최근 1시간 누락 수 계산도 수정했다. 진행 중인 캔
 
 ### Remaining scenario
 
-ETL을 사용자가 의도적으로 3분 이상 중지한 뒤 재시작하는 명시적 process-restart 시나리오는
-아직 별도로 실행하지 않았다. 이 검증은 `docs/checkpoints.md`의 Process restart 절차를
-따라 수행한다.
+WebSocket 연결을 강제로 종료한 뒤 재연결과 Backfill을 확인하는 시나리오는 아직 별도로
+실행하지 않았다. 이 검증은 `docs/checkpoints.md`의 WebSocket recovery 절차를 따른다.
+
+## 2026-08-01 — 의도적 ETL 중단 후 재시작 검증
+
+### Scenario
+
+ETL을 중지한 상태에서 Dashboard가 `STALE`, 이벤트 지연 증가, 누락 1분봉 증가를 표시하는지
+확인했다. 이후 모든 Docker 서비스를 다시 실행해 ETL의 process-restart Backfill을 검증했다.
+
+### Result
+
+- BTCUSDT Backfill: 1,275개 행, `SUCCESS`
+- ETHUSDT Backfill: 1,275개 행, `SUCCESS`
+- 복구 범위: 2026-07-31 13:37 UTC ~ 2026-08-01 10:51 UTC
+- 완료 1분봉 누락: 두 심볼 모두 0건
+- 중복 캔들 키: 0건
+- 네 checkpoint: 모두 `LIVE`, 이벤트 경과 시간 0초
+- Dashboard: 두 심볼 모두 `missing_last_hour = 0`, `lag_seconds = 0`
+- FastAPI `/health`: `{"status":"ok"}`
+
+이 결과로 최초 Backfill, 의도적 ETL 중단, 재시작 Backfill, 운영 상태의 `STALE → LIVE`
+전환을 실제 Docker 환경에서 검증했다.
