@@ -114,3 +114,18 @@ WebSocket 장애를 재현했다. 테스트가 끝날 때 임시 iptables 규칙
 
 이로써 WebSocket 강제 종료, 상태 전환, 지수 백오프 재시도, 완료 1분봉 Backfill, 실시간 상태
 복귀를 실제 Docker 환경에서 검증했다.
+
+## 2026-08-01 — Dashboard SSE 실시간 전달 검증
+
+### Scenario and result
+
+ETL을 정상 실행한 상태에서 Dashboard의 `/events` endpoint에 8초간 연결했다. 연결 확인용
+SSE comment 1건을 받고, Redis Pub/Sub를 중계한 이벤트 29건을 수신했다.
+
+- `trade`: 23건 (BTCUSDT·ETHUSDT 체결 이벤트)
+- `candle`: 6건 (진행 중 1분봉 갱신 이벤트)
+- 연결 뒤 네 checkpoint: 모두 `LIVE`, 이벤트 경과 시간 0초
+
+시간 제한으로 클라이언트가 연결을 종료해 `curl` 종료 코드 28이 반환된 것은 의도된 결과다.
+수신 이벤트 형식은 Dashboard JavaScript의 `EventSource` 처리와 호환되는 `data: {json}` SSE
+메시지임을 확인했다.
