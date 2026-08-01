@@ -11,8 +11,8 @@
 | C4 | 실시간 수집 | Binance WebSocket 이벤트 저장 및 Redis 전달 | 검증 완료 |
 | C5 | 재연결·복구 | 연결/프로세스 중단 뒤 누락 구간 Backfill 및 상태 기록 | 검증 완료 |
 | C6 | 운영 Dashboard | 상태·지연·누락·백필 이력의 서버 렌더링 화면과 API | 검증 완료 |
-| C7 | 품질 검증 | lint, test, Docker 기동, 강제 중지 복구 시나리오 증적 | Process restart 검증 완료, WebSocket 강제 종료 검증 대기 |
-| C8 | 최종 문서화 | README·지표·AI 사용·검증 결과 최신화 | 진행 중 |
+| C7 | 품질 검증 | lint, test, Docker 기동, 강제 중지 복구 시나리오 증적 | 검증 완료 |
+| C8 | 최종 문서화 | README·지표·AI 사용·검증 결과 최신화 | 검증 완료 |
 
 ## Mandatory end-to-end scenarios
 

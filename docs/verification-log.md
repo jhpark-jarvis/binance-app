@@ -42,10 +42,7 @@ Dashboard의 최근 1시간 누락 수 계산도 수정했다. 진행 중인 캔
 초기 Backfill은 각 심볼에 10,080개 행을 성공적으로 적재했다. ETL 예외 후에는 두 심볼에
 대해 3개 행의 overlap Backfill이 `SUCCESS`로 기록됐고, 이후 checkpoint가 `LIVE`로 복귀했다.
 
-### Remaining scenario
-
-WebSocket 연결을 강제로 종료한 뒤 재연결과 Backfill을 확인하는 시나리오는 아직 별도로
-실행하지 않았다. 이 검증은 `docs/checkpoints.md`의 WebSocket recovery 절차를 따른다.
+WebSocket 강제 종료·재연결 시나리오 검증 결과는 이 문서의 2026-08-01 항목에 추가한다.
 
 ## 2026-08-01 — 의도적 ETL 중단 후 재시작 검증
 
@@ -88,5 +85,32 @@ Redis 재기동 뒤 AOF 로드 완료와 `redis-cli ping`의 `PONG`을 확인했
 - Dashboard: 두 심볼 모두 `missing_last_hour = 0`, `lag_seconds = 0`
 - FastAPI `/health`: `{"status":"ok"}`
 
-Redis 복구는 WebSocket 강제 종료 시나리오를 대체하지 않는다. 해당 시나리오는 계속 별도 검증
-대상이다.
+Redis 복구는 WebSocket 강제 종료 시나리오를 대체하지 않으며, 해당 별도 검증 결과는 아래에
+기록한다.
+
+## 2026-08-01 — WebSocket 강제 종료 및 Backfill 복구 검증
+
+### Scenario
+
+ETL 컨테이너의 네트워크 namespace에 임시 진단 컨테이너를 연결했다. Binance WebSocket 포트
+`9443`의 TCP 수신·송신만 약 80초 동안 차단해, PostgreSQL·Redis·Binance REST API는 유지한 채
+WebSocket 장애를 재현했다. 테스트가 끝날 때 임시 iptables 규칙은 모두 제거했다.
+
+### Observed state transition
+
+- 기준 reconnect count: 네 checkpoint 모두 2
+- 짧은 강제 reset 후: 네 checkpoint 모두 3으로 증가
+- 장시간 차단 중: Dashboard에서 `LIVE → STALE → RECONNECTING`을 확인
+- 장시간 차단 중 reconnect count: 3에서 5까지 증가
+- 차단 해제·재연결 후: 네 checkpoint 모두 `LIVE`, reconnect count 6
+
+### Recovery result
+
+- BTCUSDT Backfill: 3개 행, `SUCCESS`
+- ETHUSDT Backfill: 3개 행, `SUCCESS`
+- Backfill 범위: 2026-08-01 11:22 UTC ~ 11:24 UTC (UTC)
+- Dashboard: 두 심볼 모두 `missing_last_hour = 0`, `lag_seconds = 0`
+- FastAPI `/health`: `{"status":"ok"}`
+
+이로써 WebSocket 강제 종료, 상태 전환, 지수 백오프 재시도, 완료 1분봉 Backfill, 실시간 상태
+복귀를 실제 Docker 환경에서 검증했다.
