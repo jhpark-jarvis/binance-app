@@ -13,7 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import get_settings
 from app.core.database import dispose_engine, get_session
 from app.core.events import MARKET_EVENTS_CHANNEL
-from app.web.dashboard import build_dashboard
+from app.web.dashboard import build_dashboard, build_market_detail, detail_window_minutes
 
 BASE_DIR = Path(__file__).parent
 templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
@@ -45,6 +45,38 @@ async def dashboard(request: Request, session: AsyncSession = Depends(get_sessio
 @app.get("/api/dashboard")
 async def dashboard_api(session: AsyncSession = Depends(get_session)) -> JSONResponse:
     return JSONResponse(await build_dashboard(session, settings.symbols))
+
+
+def _configured_symbol(symbol: str) -> str:
+    normalized = symbol.upper()
+    if normalized not in settings.symbols:
+        raise HTTPException(status_code=404, detail="Configured market symbol not found")
+    return normalized
+
+
+@app.get("/markets/{symbol}", response_class=HTMLResponse)
+async def market_detail(
+    symbol: str, request: Request, session: AsyncSession = Depends(get_session)
+) -> HTMLResponse:
+    configured_symbol = _configured_symbol(symbol)
+    detail = await build_market_detail(session, configured_symbol, "6h")
+    return templates.TemplateResponse(
+        request,
+        "market_detail.html",
+        {"detail": detail, "detail_json": json.dumps(detail)},
+    )
+
+
+@app.get("/api/markets/{symbol}/history")
+async def market_history(
+    symbol: str, window: str = "6h", session: AsyncSession = Depends(get_session)
+) -> JSONResponse:
+    configured_symbol = _configured_symbol(symbol)
+    try:
+        detail_window_minutes(window)
+    except ValueError as error:
+        raise HTTPException(status_code=422, detail=str(error)) from error
+    return JSONResponse(await build_market_detail(session, configured_symbol, window))
 
 
 @app.get("/health")

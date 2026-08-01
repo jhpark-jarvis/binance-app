@@ -21,11 +21,12 @@ function render(data) {
     </article>`).join("") || '<p class="empty">Waiting for ETL checkpoints…</p>';
 
   document.getElementById("markets").innerHTML = data.markets.map((market) => `
-    <article class="market-card">
+    <a class="market-card market-link" href="/markets/${market.symbol}" aria-label="${market.symbol} 상세 보기">
       <div class="card-title"><h3>${market.symbol}</h3><span class="badge ${market.missing_last_hour === 0 ? "ok" : "error"}">${market.missing_last_hour ?? "-"} missing / hr</span></div>
       <div class="price">${market.price === null ? "-" : formatNumber.format(market.price)}</div>
       <div class="market-meta"><span class="${(market.change_24h || 0) >= 0 ? "positive" : "negative"}">${market.change_24h === null ? "-" : `${market.change_24h.toFixed(2)}%`} / 24h</span><span>${market.lag_seconds ?? "-"}s candle lag</span></div>
-    </article>`).join("");
+      <span class="detail-link">상세 차트 보기 →</span>
+    </a>`).join("");
 
   document.getElementById("runs").innerHTML = data.runs.map((run) => `
     <tr><td>${run.symbol}</td><td>${run.type}</td><td><span class="badge ${statusClass(run.status)}">${run.status}</span></td><td>${formatNumber.format(run.rows_processed)}</td><td>${run.started_at ? new Date(run.started_at).toLocaleString() : "-"}</td></tr>`).join("") || '<tr><td colspan="5" class="empty">No backfill runs yet.</td></tr>';

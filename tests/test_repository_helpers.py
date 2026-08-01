@@ -7,6 +7,8 @@ from app.web.dashboard import (
     STALE_EVENT_THRESHOLD_SECONDS,
     count_missing_completed_minutes,
     derive_checkpoint_status,
+    detail_window_minutes,
+    missing_completed_open_times,
 )
 
 
@@ -53,3 +55,18 @@ def test_live_checkpoint_becomes_stale_when_heartbeat_is_old() -> None:
 
     assert status == "STALE"
     assert age_seconds == STALE_EVENT_THRESHOLD_SECONDS + 1
+
+
+def test_detail_window_is_limited_to_supported_operational_ranges() -> None:
+    assert detail_window_minutes("6h") == 360
+
+
+def test_detail_missing_times_excludes_current_open_candle() -> None:
+    last_completed = 1_710_000_000_000
+    closed = {last_completed - offset * ONE_MINUTE_MS for offset in (0, 2)}
+
+    missing = missing_completed_open_times(
+        closed, last_completed - 2 * ONE_MINUTE_MS, last_completed
+    )
+
+    assert missing == [last_completed - ONE_MINUTE_MS]

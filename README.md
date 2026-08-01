@@ -136,6 +136,7 @@ docker compose logs -f etl web
 | Pipeline health | 심볼·소스별 상태와 마지막 이벤트 시간 | Binance 이벤트가 ETL까지 들어오는지 확인 |
 | Reconnects | 재연결 횟수 | 네트워크 또는 Binance 연결의 불안정성 확인 |
 | Market status | 최신가, 24시간 변동률, candle lag | 수집 데이터의 최신성 확인 |
+| 종목 상세 차트 | 1분봉, 거래량, 누락 구간, 최근 체결, 종목별 복구 이력 | 시간축의 실제 데이터 연속성과 실시간 갱신 확인 |
 | Missing / hr | 최근 완료 1분봉 60개 중 누락 수 | 데이터 연속성 확인. 정상은 `0` |
 | Recent recovery runs | Backfill 상태, 처리 행 수, 시작 시각 | 재시작·재연결 복구가 수행됐는지 확인 |
 
@@ -154,6 +155,17 @@ docker compose logs -f etl web
 `Recent recovery runs`의 `SUCCESS`는 마지막 Backfill이 성공했다는 이력일 뿐, 현재 ETL이
 실행 중이라는 뜻은 아닙니다.
 
+### 종목 상세 차트 보기
+
+`Market status`의 BTCUSDT 또는 ETHUSDT 카드를 클릭하면 해당 종목의 상세 화면으로 이동합니다.
+기본 구간은 6시간이며 `1시간`, `6시간`, `24시간`, `7일`로 변경할 수 있습니다.
+
+- 캔들과 거래량은 PostgreSQL에 저장된 실제 1분봉입니다.
+- 완료돼야 하지만 없는 1분봉은 주황색 음영으로 표시합니다. 차트를 위해 가격을 보간하지 않습니다.
+- 현재 진행 중인 1분봉은 점선입니다. 완료 1분봉과 혼동하지 마세요.
+- Redis/SSE는 새 데이터 도착을 알리고, 화면은 PostgreSQL API를 제한된 주기로 다시 조회합니다.
+- 최근 체결과 해당 종목의 Backfill 이력도 함께 확인할 수 있습니다.
+
 ### 상태 API 확인
 
 브라우저 대신 터미널에서도 상태를 확인할 수 있습니다.
@@ -170,10 +182,13 @@ Invoke-RestMethod http://localhost:8000/api/dashboard | ConvertTo-Json -Depth 8
 ```bash
 curl -fsS http://localhost:8000/health
 curl -fsS http://localhost:8000/api/dashboard
+curl -fsS "http://localhost:8000/api/markets/BTCUSDT/history?window=6h"
 ```
 
 - `/health`: Web이 PostgreSQL·Redis에 연결할 수 있는지 확인합니다.
 - `/api/dashboard`: Dashboard에 표시하는 운영 데이터의 JSON입니다.
+- `/markets/{symbol}`: 구성된 종목의 상세 차트 화면입니다. 예: `/markets/BTCUSDT`
+- `/api/markets/{symbol}/history?window=1h|6h|24h|7d`: 상세 차트의 PostgreSQL 조회 API입니다.
 - `/events`: 브라우저 갱신에 사용하는 Server-Sent Events(SSE) endpoint입니다.
 
 ## 5. 중지, 재시작, 종료

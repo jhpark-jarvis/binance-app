@@ -10,7 +10,7 @@
 | Recovery contract | 완료된 1분봉 | 시간 범위 REST 조회와 누락 검사로 연속성을 명확하게 증명한다. | 더 짧은 해상도 또는 원시 체결 완전성이 요구될 때 |
 | Database | PostgreSQL | 유니크 제약, upsert, 마이그레이션, 운영 이력을 안정적으로 제공한다. | 대규모 시계열 보관 비용이 우선 과제가 될 때 |
 | Redis role | Pub/Sub + short TTL cache | 분리된 ETL/Web의 실시간 전달을 단순하게 만들며 DB를 대체하지 않는다. | 메시지 영속 전달 또는 다중 소비자 재처리가 필요할 때 Redis Streams/queue 검토 |
-| Dashboard UI | FastAPI + Jinja2 + small JS | 수집·복구 기능을 먼저 검증하고 프론트엔드 복잡도를 제한한다. | 고급 필터·차트·상호작용 요구가 커질 때 |
+| Dashboard UI | FastAPI + Jinja2 + small JS + native Canvas | 수집·복구 기능을 먼저 검증하면서도 외부 프레임워크 없이 종목별 캔들·거래량·누락 구간을 표현한다. | 고급 필터·지표·상호작용 요구가 커질 때 |
 | Deployment | Docker Compose | 로컬 재현, VM 이전, 서비스 분리와 향후 확장을 준비한다. | 오케스트레이션·고가용성 요구가 생길 때 |
 
 ## Before implementation checklist
@@ -21,4 +21,3 @@
 - [ ] 실패·재시도·재시작 시 동작을 정의했는가?
 - [ ] Dashboard에서 새 상태를 관찰해야 하는가?
 - [ ] 테스트 또는 재현 절차와 문서 갱신 항목을 정했는가?
-

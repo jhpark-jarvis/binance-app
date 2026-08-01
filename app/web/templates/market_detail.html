@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{{ detail.symbol }} · Market Detail</title>
+    <link rel="stylesheet" href="{{ url_for('static', path='dashboard.css') }}" />
+  </head>
+  <body>
+    <main class="container">
+      <a class="back-link" href="/">← 운영 대시보드로 돌아가기</a>
+      <header class="page-header detail-header">
+        <div>
+          <p class="eyebrow">MARKET DETAIL · POSTGRESQL SOURCE OF TRUTH</p>
+          <h1 id="market-symbol">{{ detail.symbol }}</h1>
+        </div>
+        <div class="detail-price">
+          <span id="latest-price-value">-</span>
+          <small id="latest-price-time">수집 데이터 대기 중</small>
+        </div>
+      </header>
+
+      <section class="detail-summary" aria-label="운영 요약">
+        <article class="summary-card"><span class="label">선택 구간</span><strong id="coverage-range">-</strong></article>
+        <article class="summary-card"><span class="label">완료 1분봉 누락</span><strong id="missing-count">-</strong></article>
+        <article class="summary-card"><span class="label">실시간 갱신</span><strong id="refresh-state">연결 대기</strong></article>
+      </section>
+
+      <section class="chart-panel" aria-labelledby="candle-title">
+        <div class="chart-toolbar">
+          <div>
+            <h2 id="candle-title">1분봉 캔들</h2>
+            <p class="chart-legend"><span class="positive">■ 상승</span> <span class="negative">■ 하락</span> <span>▨ 누락된 완료 분봉</span></p>
+          </div>
+          <div class="range-buttons" aria-label="차트 조회 구간">
+            <button class="range-button" data-window="1h" type="button">1시간</button>
+            <button class="range-button active" data-window="6h" type="button">6시간</button>
+            <button class="range-button" data-window="24h" type="button">24시간</button>
+            <button class="range-button" data-window="7d" type="button">7일</button>
+          </div>
+        </div>
+        <canvas id="candle-chart" class="chart-canvas" aria-label="1분봉 캔들 차트"></canvas>
+        <canvas id="volume-chart" class="volume-canvas" aria-label="거래량 차트"></canvas>
+        <p class="chart-caption">공백 음영은 데이터가 없는 완료 1분봉입니다. 현재 진행 중인 1분봉은 점선으로 표시됩니다.</p>
+      </section>
+
+      <section class="detail-grid">
+        <section class="side-panel" aria-labelledby="trades-title">
+          <h2 id="trades-title">최근 체결</h2>
+          <ul id="trades" class="trade-list"></ul>
+        </section>
+        <section class="side-panel" aria-labelledby="runs-title">
+          <h2 id="runs-title">이 종목의 최근 복구</h2>
+          <ul id="runs" class="recovery-list"></ul>
+        </section>
+      </section>
+    </main>
+    <script>window.__INITIAL_DETAIL__ = {{ detail_json | safe }};</script>
+    <script src="{{ url_for('static', path='market_detail.js') }}"></script>
+  </body>
+</html>

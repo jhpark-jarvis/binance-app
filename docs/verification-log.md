@@ -129,3 +129,27 @@ SSE comment 1건을 받고, Redis Pub/Sub를 중계한 이벤트 29건을 수신
 시간 제한으로 클라이언트가 연결을 종료해 `curl` 종료 코드 28이 반환된 것은 의도된 결과다.
 수신 이벤트 형식은 Dashboard JavaScript의 `EventSource` 처리와 호환되는 `data: {json}` SSE
 메시지임을 확인했다.
+
+## 2026-08-01 — 종목 상세 차트 API·화면 통합 검증
+
+### Implemented behavior
+
+메인 Dashboard의 BTCUSDT·ETHUSDT 카드를 종목 상세 페이지로 연결했다. 상세 페이지는
+PostgreSQL의 실제 1분봉을 native Canvas로 그리며, `1h`, `6h`, `24h`, `7d` 구간 선택,
+거래량·최근 체결·종목별 Backfill 이력·완료 1분봉 누락 음영을 제공한다. Redis/SSE는 화면의
+갱신 신호로만 사용한다.
+
+### Executed checks
+
+- `GET /markets/BTCUSDT`: 200, 심볼·캔버스·상세 JavaScript·대시보드 복귀 링크 포함
+- `GET /api/markets/BTCUSDT/history?window=6h`: 360개 캔들, 완료 분봉 누락 0개, 최근 체결 12개
+- `GET /api/markets/ETHUSDT/history?window=7d`: 10,080개 캔들, 완료 분봉 누락 0개
+- 지원하지 않는 `window=365d`: 422
+- 구성하지 않은 `XRPUSDT`: 404
+- `/events` 5초 구독: 16개 이벤트 수신, 이 중 BTCUSDT 이벤트 7개. 이후 1시간 상세 API 재조회도
+  정상 수행
+- `/health`: `{"status":"ok"}`
+
+이 대화 환경에는 제어 가능한 브라우저 탭이 없어 Canvas의 실제 픽셀 렌더링과 버튼 클릭은 자동
+시각 검증하지 못했다. HTTP·API·정적 자산 검증은 완료됐으며, 최종 사용 전 브라우저에서 두
+종목 카드와 각 구간 버튼을 한 번씩 확인하면 된다.

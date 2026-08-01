@@ -25,3 +25,17 @@
 
 Aggregate Trade는 향후 최근 체결·taker flow 테이블을 위한 원본 데이터로 유지한다.
 체결 이벤트의 buyer-maker 플래그는 taker 방향을 파생할 때만 사용하며, 투자 신호로 해석하지 않는다.
+
+## Market detail chart
+
+| Metric / visual | Definition | Reason |
+|---|---|---|
+| 1-minute candlestick | PostgreSQL에 저장된 실제 1분봉 OHLC. 진행 중인 현재 봉은 점선으로 구분 | 최신 가격뿐 아니라 시간축의 연속성과 봉 갱신을 함께 본다. |
+| Volume bars | 동일한 1분봉의 거래량 | 가격 변화 시 수집된 거래량이 함께 갱신되는지 확인한다. |
+| Missing completed-minute shading | 선택 구간에서 완료돼야 했지만 DB에 없는 1분봉 | 없는 데이터를 보간하지 않고, 복구가 필요한 실제 공백을 눈에 띄게 만든다. |
+| Recent trades | Aggregate Trade의 최근 12개 체결 | 캔들 갱신 외에도 실시간 체결 흐름이 들어오는지 확인한다. |
+| Recovery history | 선택 종목의 최근 Backfill 실행 | 시각적 공백과 복구 이력을 같은 종목 맥락에서 확인한다. |
+
+상세 화면의 구간은 `1h`, `6h`, `24h`, `7d`로 제한한다. 임의로 긴 조회를 허용하지 않아 운영
+화면이 PostgreSQL에 과도한 범위 조회를 보내지 않게 한다. 7일 구간은 브라우저 렌더링 시 화면
+폭에 맞춰 캔들을 묶어 그리지만, 누락 판정과 API 원본 데이터는 1분 해상도를 유지한다.
