@@ -20,6 +20,13 @@ Binance REST / WebSocket
        └──── FastAPI Dashboard ──── Browser
 ```
 
+### Architecture overview and ERD
+
+![전체 아키텍처와 PostgreSQL ERD](docs/assets/architecture-overview.svg)
+
+원본 SVG는 확대해도 선명하며, [별도 탭에서 열어 보기](docs/assets/architecture-overview.svg)로
+세부 필드와 복구 흐름을 확인할 수 있습니다.
+
 Docker Compose는 아래 다섯 개의 서비스를 실행합니다.
 
 | Service | 역할 | 정상 상태 |
