@@ -34,7 +34,7 @@ Docker Compose는 아래 다섯 개의 서비스를 실행합니다.
 | `postgres` | 캔들·체결·수집 상태·백필 이력 영속화 | `running (healthy)` |
 | `redis` | ETL → Web 실시간 이벤트 전달, 최신 상태 캐시 | `running (healthy)` |
 | `migrate` | Alembic DB schema migration 실행 | `exited (0)` — 정상 |
-| `etl` | Binance 실시간 수집, Backfill, 재연결 | `running` |
+| `etl` | Binance 실시간 수집, Backfill, 재연결, 주기적 연속성 검사 | `running (healthy)` |
 | `web` | FastAPI Dashboard와 상태 조회 API | `running (healthy)` |
 
 ## 2. 사전 준비
@@ -122,7 +122,9 @@ docker compose logs --tail 100 web
 정상적인 예시는 다음과 같습니다.
 
 - `postgres`, `redis`, `web`은 `running` 또는 `healthy`
-- `etl`은 `running`
+- `etl`은 초기 Backfill과 WebSocket 이벤트 수신 뒤 `running (healthy)`가 됩니다. ETL healthcheck는
+  모든 종목·source checkpoint가 최근 이벤트를 가진 `LIVE` 또는 `RECOVERED` 상태인지 검사하므로,
+  시작 직후 최대 2분간 `starting`으로 보일 수 있습니다.
 - `migrate`는 schema 적용 후 `exited (0)`
 - ETL log에 Backfill 시작·완료 또는 WebSocket 연결 관련 로그가 표시됨
 
@@ -145,7 +147,7 @@ docker compose logs -f etl web
 | Market status | 최신가, 24시간 변동률, candle lag | 수집 데이터의 최신성 확인 |
 | 종목 상세 차트 | 1분봉, 거래량, 누락 구간, 최근 체결, 종목별 복구 이력 | 시간축의 실제 데이터 연속성과 실시간 갱신 확인 |
 | Missing / hr | 최근 완료 1분봉 60개 중 누락 수 | 데이터 연속성 확인. 정상은 `0` |
-| Recent recovery runs | Backfill 상태, 처리 행 수, 시작 시각 | 재시작·재연결 복구가 수행됐는지 확인 |
+| Recent recovery runs | Backfill·주기 검사 상태, 처리 행 수, 시작 시각 | 재시작·재연결 복구와 마지막 자동 연속성 검사를 확인 |
 
 정상 운영에서는 수집 상태가 `LIVE`, 누락이 `0 missing / hr`에 가까운 상태여야 합니다.
 초기 Backfill 또는 연결 복구 중에는 일시적으로 `RECOVERED` 또는 `RECONNECTING` 상태가
@@ -159,7 +161,7 @@ docker compose logs -f etl web
 | `FAILED` | Backfill 또는 연결 처리 실패가 기록됨 | ETL 로그와 Binance API 접근 확인 |
 
 헤더의 `실시간 이벤트 수신 중`도 모든 checkpoint가 `LIVE`일 때만 표시됩니다. 과거
-`Recent recovery runs`의 `SUCCESS`는 마지막 Backfill이 성공했다는 이력일 뿐, 현재 ETL이
+`Recent recovery runs`의 `SUCCESS`는 Backfill 또는 주기 검사 성공 이력일 뿐, 현재 ETL이
 실행 중이라는 뜻은 아닙니다.
 
 ### 종목 상세 차트 보기
@@ -225,6 +227,12 @@ Backfill한 뒤 실시간 수집을 이어갑니다.
 docker compose up -d
 ```
 
+`etl`, `web`, `postgres`, `redis`에는 `restart: unless-stopped`가 적용돼 있습니다. Docker daemon
+재시작 또는 컨테이너 프로세스 비정상 종료 뒤에는 Compose가 서비스를 다시 시작합니다. 다만
+`docker compose stop`, `docker compose down`은 운영자가 의도적으로 중지한 것으로 간주하므로,
+다시 실행하려면 위의 `start` 또는 `up -d` 명령을 직접 사용해야 합니다. `migrate`는 일회성 작업이라
+자동 재시작하지 않으며, `exited (0)`이 정상 상태입니다.
+
 ### ETL만 재시작해 Backfill 확인하기
 
 복구 기능을 확인하려면 ETL만 최소 3분 중지한 뒤 다시 시작합니다.
@@ -265,6 +273,8 @@ docker compose down -v
 | `KLINE_INTERVAL` | `1m` | 연속성 검증 기준 캔들 간격. 현재 `1m`만 지원 |
 | `BOOTSTRAP_DAYS` | `7` | 빈 DB에서 처음 가져올 과거 완료 1분봉 일수 |
 | `BACKFILL_OVERLAP_MINUTES` | `2` | 첫 누락 시점보다 앞서 다시 적재할 분 수 |
+| `RECONCILIATION_INTERVAL_SECONDS` | `300` | 연결 유지 중에도 완료 1분봉 coverage를 재검사하는 주기(60~3600초) |
+| `ETL_HEALTH_MAX_EVENT_AGE_SECONDS` | `60` | ETL Docker healthcheck가 허용하는 마지막 Binance 이벤트 경과 시간(15~600초) |
 | `BINANCE_REST_URL` | `https://api.binance.com` | Binance Spot REST base URL |
 | `BINANCE_WS_URL` | `wss://stream.binance.com:9443/stream` | Binance combined WebSocket stream URL |
 | `WEB_HOST` | `0.0.0.0` | FastAPI bind host |
@@ -279,7 +289,32 @@ docker compose down -v
 3. 첫 누락 시점보다 `BACKFILL_OVERLAP_MINUTES`만큼 앞선 지점부터 현재 마지막 완료 분봉까지
    Binance REST API로 다시 조회합니다.
 4. `(symbol, interval, open_time)` 유니크 키 기반 upsert로 중복 없이 저장합니다.
-5. 완료 결과를 `Recent recovery runs`와 Dashboard 상태에 기록합니다.
+5. 적재 뒤 같은 범위를 다시 검사합니다. 공백이 하나라도 남으면 성공으로 기록하지 않습니다.
+6. 연결이 유지돼도 `RECONCILIATION_INTERVAL_SECONDS`마다 같은 coverage 검사를 실행합니다.
+   누락이 없으면 처리 행 수 `0`인 `RECONCILIATION SUCCESS`, 누락이 있으면 Backfill 행 수가 포함된
+   `RECONCILIATION SUCCESS`를 `Recent recovery runs`에 남깁니다.
+
+### 자동 복구 범위와 운영자 확인 방법
+
+| 상황 | 자동 동작 | 운영자가 확인할 항목 |
+|---|---|---|
+| ETL 프로세스 종료 | Compose 재기동 후 시작 Backfill | `docker compose ps`, ETL `healthy`, `missing / hr = 0` |
+| WebSocket 종료 | 지수 백오프 재연결 후 Backfill | checkpoint `RECONNECTING → LIVE`, Backfill `SUCCESS` |
+| 연결은 유지되지만 완료 분봉 누락 | 다음 reconciliation 주기에 coverage 검사·Backfill·재검증 | `RECONCILIATION SUCCESS`, 누락 0, 중복 키 0 |
+| Web·PostgreSQL·Redis 프로세스 종료 | Compose restart policy로 재기동 | `/health`, `docker compose ps`, ETL healthcheck |
+| Redis AOF 손상 | 자동 수리하지 않음 | 아래 Redis AOF 복구 절차 수행 |
+
+ETL 상태를 터미널에서 확인하려면 다음 명령을 사용합니다. `unhealthy`는 checkpoint가 없거나,
+재연결/실패 상태이거나, 마지막 이벤트가 `ETL_HEALTH_MAX_EVENT_AGE_SECONDS`를 넘었다는 뜻입니다.
+
+```bash
+docker compose ps
+docker compose logs --tail 150 etl
+docker inspect --format '{{.State.Health.Status}}' "$(docker compose ps -q etl)"
+```
+
+Windows PowerShell에서도 Docker 명령은 동일하게 동작합니다. PowerShell에서 마지막 명령이
+불편하면 `docker compose ps`의 `STATUS` 열과 `docker compose logs --tail 150 etl`만으로 확인해도 됩니다.
 
 실시간 Aggregate Trade는 최근 체결 흐름을 위해 저장하며, 시간축의 연속성·Backfill 완료 여부는
 1분봉으로 판정합니다.
@@ -396,4 +431,6 @@ Binance API 접근이 네트워크·지역·방화벽 정책으로 차단됐는�
 - [작업·데이터·commit 규칙](docs/project-rules.md)
 - [기술 선택 근거와 작업 전 점검표](docs/preflight-decisions.md)
 - [Dashboard 지표 정의](docs/metrics.md)
+- [현재 복구 범위와 수동 복구 절차 (RESTORE-PROCESS AS-IS)](docs/restore-process-as-is.md)
+- [다음 안정성 개선 계획과 완료 조건 (Reliability TO-BE)](docs/reliability-to-be.md)
 - [다른 AI Agent를 위한 handoff guide](AGENTS.md)

@@ -13,6 +13,8 @@ class Settings(BaseSettings):
     kline_interval: str = "1m"
     bootstrap_days: int = Field(default=7, ge=1, le=90)
     backfill_overlap_minutes: int = Field(default=2, ge=0, le=10)
+    reconciliation_interval_seconds: int = Field(default=300, ge=60, le=3600)
+    etl_health_max_event_age_seconds: int = Field(default=60, ge=15, le=600)
     binance_rest_url: HttpUrl = "https://api.binance.com"
     binance_ws_url: str = "wss://stream.binance.com:9443/stream"
     web_host: str = "0.0.0.0"

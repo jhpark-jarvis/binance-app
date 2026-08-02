@@ -14,6 +14,19 @@
 | C7 | 품질 검증 | lint, test, Docker 기동, 강제 중지 복구 시나리오 증적 | 검증 완료 |
 | C8 | 최종 문서화 | README·지표·AI 사용·검증 결과 최신화 | 검증 완료 |
 
+## Reliability improvement phase
+
+초기 과제의 완료 기준과 별개로, 아래 항목은 운영 복원력을 높이기 위한 다음 단계다.
+
+| ID | Checkpoint | 완료 조건 | 상태 |
+|---|---|---|---|
+| R0 | RESTORE-PROCESS AS-IS / TO-BE | 기준선·현재 한계·개선 우선순위·검증 조건 문서화 | 완료 |
+| R1 | Service liveness | Compose 서비스 재기동 정책과 ETL health 관측 검증 | 검증 완료 |
+| R2 | Periodic reconciliation | 연결 유지 중 발생한 완료 1분봉 공백의 자동 발견·Backfill 검증 | 검증 완료 |
+| R3 | Observability | 상태·실패·반복 재연결의 운영 가시성 강화 | 대기 |
+| R4 | PostgreSQL backup/restore | 별도 환경 복원과 schema·데이터 정합성 검증 | 대기 |
+| R5 | Trade recovery decision | Aggregate Trade 공백 허용 또는 Backfill 정책 결정 | 대기 |
+
 ## Mandatory end-to-end scenarios
 
 ### Fresh start

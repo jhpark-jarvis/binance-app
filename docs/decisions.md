@@ -32,3 +32,14 @@ Pub/Sub 유실 뒤에도 상세 화면을 새로 열면 영속 데이터에서 �
 캔들은 외부 프론트엔드 프레임워크나 차트 의존성을 추가하지 않고 native Canvas로 그린다. 완료된
 1분봉이 없는 구간은 임의의 가격으로 채우지 않고 음영 공백으로 표시한다. 이는 차트를 투자 판단
 화면보다 데이터 연속성 확인을 위한 운영 도구로 유지하기 위한 선택이다.
+
+## AD-006: Periodic reconciliation verifies completed-candle coverage independently of WebSocket state
+
+WebSocket 연결이 유지돼도 특정 이벤트 또는 DB 쓰기만 조용히 누락될 수 있다. 따라서 ETL은
+연결·재연결 시점뿐 아니라 설정 주기마다 최근 `BOOTSTRAP_DAYS`의 완료 1분봉 coverage를
+PostgreSQL에서 다시 검사한다. 공백이 발견되면 기존 REST Backfill과 overlap upsert를 재사용한
+뒤 coverage를 재검증하며, 끝까지 남은 공백은 성공으로 기록하지 않는다.
+
+주기 검사 결과는 `RECONCILIATION` ingestion run으로 남긴다. 데이터가 이미 연속적인 경우도
+0행 `SUCCESS` 이력을 남겨 “마지막 자동 검사 시각”을 운영자가 확인할 수 있게 한다. 이력은
+관측 용도이며 PostgreSQL의 캔들 데이터나 checkpoint를 대체하지 않는다.

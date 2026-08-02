@@ -18,6 +18,22 @@ logger = logging.getLogger(__name__)
 ONE_MINUTE_MS = 60_000
 
 
+def first_missing_open_time(
+    closed_open_times: set[int], coverage_start: int, last_completed_open: int
+) -> int | None:
+    """Return the earliest expected completed candle that is absent from storage."""
+    return next(
+        (
+            open_time
+            for open_time in range(
+                coverage_start, last_completed_open + ONE_MINUTE_MS, ONE_MINUTE_MS
+            )
+            if open_time not in closed_open_times
+        ),
+        None,
+    )
+
+
 class Collector:
     def __init__(
         self,
@@ -67,11 +83,25 @@ class Collector:
             # The reader starts first, buffering events while REST reconciliation runs.
             await self._recover_all_symbols()
             await self._mark_all_live()
+            next_reconciliation_at = (
+                time.monotonic() + self._settings.reconciliation_interval_seconds
+            )
             while not self._stopped.is_set():
                 next_event = asyncio.create_task(queue.get())
                 done, _ = await asyncio.wait(
-                    {reader, next_event}, return_when=asyncio.FIRST_COMPLETED
+                    {reader, next_event},
+                    timeout=max(0, next_reconciliation_at - time.monotonic()),
+                    return_when=asyncio.FIRST_COMPLETED,
                 )
+                if not done:
+                    next_event.cancel()
+                    with suppress(asyncio.CancelledError):
+                        await next_event
+                    await self._run_periodic_reconciliation()
+                    next_reconciliation_at = (
+                        time.monotonic() + self._settings.reconciliation_interval_seconds
+                    )
+                    continue
                 if reader in done:
                     if not next_event.done():
                         next_event.cancel()
@@ -95,11 +125,30 @@ class Collector:
             with suppress(asyncio.CancelledError):
                 await reader
 
-    async def _recover_all_symbols(self) -> None:
+    async def _recover_all_symbols(
+        self,
+        *,
+        run_type: str = "BACKFILL",
+        record_noop: bool = False,
+        raise_on_error: bool = True,
+    ) -> None:
         for symbol in self._settings.symbols:
-            await self._recover_candles(symbol)
+            try:
+                await self._recover_candles(symbol, run_type=run_type, record_noop=record_noop)
+            except Exception:
+                if raise_on_error:
+                    raise
+                logger.exception("Periodic reconciliation failed: symbol=%s", symbol)
 
-    async def _recover_candles(self, symbol: str) -> None:
+    async def _run_periodic_reconciliation(self) -> None:
+        logger.info("Periodic completed-candle reconciliation started")
+        await self._recover_all_symbols(
+            run_type="RECONCILIATION", record_noop=True, raise_on_error=False
+        )
+
+    async def _recover_candles(
+        self, symbol: str, *, run_type: str = "BACKFILL", record_noop: bool = False
+    ) -> bool:
         now_ms = int(time.time() * 1000)
         last_completed_open = (now_ms // ONE_MINUTE_MS - 1) * ONE_MINUTE_MS
         coverage_start = (
@@ -111,18 +160,13 @@ class Collector:
                 session, symbol, self._settings.kline_interval, coverage_start, last_completed_open
             )
 
-        missing_start = next(
-            (
-                open_time
-                for open_time in range(
-                    coverage_start, last_completed_open + ONE_MINUTE_MS, ONE_MINUTE_MS
-                )
-                if open_time not in existing
-            ),
-            None,
-        )
+        missing_start = first_missing_open_time(existing, coverage_start, last_completed_open)
         if missing_start is None:
-            return
+            if record_noop:
+                await self._record_successful_reconciliation(
+                    symbol, coverage_start, last_completed_open
+                )
+            return False
 
         reconciliation_start = max(
             coverage_start,
@@ -138,7 +182,7 @@ class Collector:
         )
         async with self._session_factory() as session:
             run = await self._repository.create_run(
-                session, symbol, "BACKFILL", reconciliation_start, last_completed_open
+                session, symbol, run_type, reconciliation_start, last_completed_open
             )
             await session.commit()
 
@@ -157,6 +201,23 @@ class Collector:
                 next_start = candles[-1].open_time + ONE_MINUTE_MS
 
             async with self._session_factory() as session:
+                persisted = await self._repository.closed_open_times(
+                    session,
+                    symbol,
+                    self._settings.kline_interval,
+                    coverage_start,
+                    last_completed_open,
+                )
+            remaining_missing = first_missing_open_time(
+                persisted, coverage_start, last_completed_open
+            )
+            if remaining_missing is not None:
+                raise RuntimeError(
+                    "Completed-candle reconciliation is incomplete: "
+                    f"symbol={symbol} missing_open_time={remaining_missing}"
+                )
+
+            async with self._session_factory() as session:
                 await self._repository.finish_run(
                     session, run, status="SUCCESS", rows_processed=rows_processed
                 )
@@ -172,11 +233,13 @@ class Collector:
                 "backfill_completed",
                 {
                     "symbol": symbol,
+                    "type": run_type,
                     "start": reconciliation_start,
                     "end": last_completed_open,
                     "rows": rows_processed,
                 },
             )
+            return True
         except Exception as error:
             async with self._session_factory() as session:
                 await self._repository.finish_run(
@@ -187,6 +250,18 @@ class Collector:
                 )
                 await session.commit()
             raise
+
+    async def _record_successful_reconciliation(
+        self, symbol: str, range_start: int, range_end: int
+    ) -> None:
+        async with self._session_factory() as session:
+            run = await self._repository.create_run(
+                session, symbol, "RECONCILIATION", range_start, range_end
+            )
+            await self._repository.finish_run(
+                session, run, status="SUCCESS", rows_processed=0
+            )
+            await session.commit()
 
     async def _persist_live_batch(self, events: Iterable[Candle | Trade]) -> None:
         candles = [event for event in events if isinstance(event, Candle)]

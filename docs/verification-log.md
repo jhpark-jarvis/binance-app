@@ -153,3 +153,38 @@ PostgreSQL의 실제 1분봉을 native Canvas로 그리며, `1h`, `6h`, `24h`, `
 이 대화 환경에는 제어 가능한 브라우저 탭이 없어 Canvas의 실제 픽셀 렌더링과 버튼 클릭은 자동
 시각 검증하지 못했다. HTTP·API·정적 자산 검증은 완료됐으며, 최종 사용 전 브라우저에서 두
 종목 카드와 각 구간 버튼을 한 번씩 확인하면 된다.
+
+## 2026-08-02 — Restore R1/R2: service liveness와 주기적 reconciliation
+
+### Implemented behavior
+
+- `postgres`, `redis`, `etl`, `web`에 Compose `restart: unless-stopped`를 적용했다. `migrate`는
+  일회성 migration이므로 재시작 대상이 아니다.
+- ETL은 PostgreSQL에 저장된 모든 configured symbol의 `KLINE_1M`, `AGG_TRADE` checkpoint가
+  최근 Binance 이벤트를 가진 `LIVE` 또는 `RECOVERED` 상태인지 검사하는 Docker healthcheck를 가진다.
+- ETL은 `RECONCILIATION_INTERVAL_SECONDS`(기본 300초)마다 최근 `BOOTSTRAP_DAYS`의 완료 1분봉
+  coverage를 검사한다. 공백이 있으면 overlap REST Backfill·upsert 후 같은 범위를 재검사한다.
+- 주기 검사마다 `RECONCILIATION` run을 남긴다. 공백이 없으면 0행 `SUCCESS`, 복구가 발생하면
+  실제 upsert 행 수가 기록된다.
+
+### Executed checks
+
+- `ruff check .`: pass
+- `pytest -q`: 11 passed
+- `python -m compileall -q app alembic`: pass
+- `docker compose config --quiet`: pass
+- Docker ETL health command: `ETL healthy`
+- Compose restart policy inspect: `postgres`, `redis`, `etl`, `web` 모두 `unless-stopped`
+- Web PID 1 종료 뒤 Dashboard 컨테이너 재기동, healthcheck `healthy`, `/health`:
+  `{"status":"ok"}`
+
+### Silent-gap recovery scenario
+
+빠른 검증을 위해 `.env`는 바꾸지 않고 Compose 실행 시에만 reconciliation 주기를 60초로
+주입했다. WebSocket을 유지한 상태에서 `BTCUSDT`의 완료 1분봉 `2026-08-01 17:03:00 UTC`
+(`open_time=1785603780000`) 한 건을 삭제했다.
+
+다음 주기에서 `RECONCILIATION`이 공백을 발견해 2분 overlap을 포함한 6개 행을 적재했고,
+`RECONCILIATION SUCCESS`로 마감했다. 대상 분봉은 다시 1건 존재했고, BTCUSDT의
+`(symbol, interval, open_time)` 중복 키 조회 결과는 0건이었다. 검증 후 ETL 컨테이너는
+운영 기본값 `RECONCILIATION_INTERVAL_SECONDS=300`으로 다시 생성했다.

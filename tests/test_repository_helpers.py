@@ -1,5 +1,9 @@
 from decimal import Decimal
 
+from app.core.models import IngestionCheckpoint
+from app.etl.collector import ONE_MINUTE_MS as COLLECTOR_ONE_MINUTE_MS
+from app.etl.collector import first_missing_open_time
+from app.etl.health import checkpoint_health_issues
 from app.etl.repository import deduplicate_candles
 from app.etl.types import Candle
 from app.web.dashboard import (
@@ -70,3 +74,56 @@ def test_detail_missing_times_excludes_current_open_candle() -> None:
     )
 
     assert missing == [last_completed - ONE_MINUTE_MS]
+
+
+def test_first_missing_open_time_returns_the_earliest_gap() -> None:
+    coverage_start = 1_710_000_000_000
+    existing = {
+        coverage_start,
+        coverage_start + 2 * COLLECTOR_ONE_MINUTE_MS,
+    }
+
+    assert (
+        first_missing_open_time(
+            existing, coverage_start, coverage_start + 2 * COLLECTOR_ONE_MINUTE_MS
+        )
+        == coverage_start + COLLECTOR_ONE_MINUTE_MS
+    )
+
+
+def test_etl_health_requires_all_recent_live_checkpoints() -> None:
+    now_ms = 1_710_000_000_000
+    checkpoints = [
+        IngestionCheckpoint(
+            symbol="BTCUSDT",
+            source=source,
+            connection_status="LIVE",
+            last_event_time=now_ms - 5_000,
+        )
+        for source in ("KLINE_1M", "AGG_TRADE")
+    ]
+
+    assert checkpoint_health_issues(checkpoints, ("BTCUSDT",), 60, now_ms) == []
+
+    checkpoints[1].connection_status = "RECONNECTING"
+    assert checkpoint_health_issues(checkpoints, ("BTCUSDT",), 60, now_ms) == [
+        "BTCUSDT/AGG_TRADE: status=RECONNECTING"
+    ]
+
+
+def test_etl_health_rejects_a_stale_checkpoint() -> None:
+    now_ms = 1_710_000_000_000
+    checkpoints = [
+        IngestionCheckpoint(
+            symbol="BTCUSDT",
+            source=source,
+            connection_status="LIVE",
+            last_event_time=now_ms - 61_000,
+        )
+        for source in ("KLINE_1M", "AGG_TRADE")
+    ]
+
+    assert checkpoint_health_issues(checkpoints, ("BTCUSDT",), 60, now_ms) == [
+        "BTCUSDT/KLINE_1M: event age=61s",
+        "BTCUSDT/AGG_TRADE: event age=61s",
+    ]

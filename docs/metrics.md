@@ -8,12 +8,13 @@
 | Last event time | Binance가 전송한 가장 최근 이벤트 시각 | 외부 데이터 흐름의 신선도를 판단한다. |
 | Reconnect count | 현재 실행 중 재연결 횟수 | 네트워크 또는 거래소 연결의 불안정성을 발견한다. |
 | Missing candles / hour | 최근 완료된 60개 1분봉 중 비어 있는 수 | 데이터 연속성 계약을 운영자가 확인한다. |
-| Backfill result | 복구 범위·처리 행 수·성공 여부 | 장애 후 복구가 실제로 수행됐는지 추적한다. |
+| Recovery / reconciliation result | Backfill 또는 주기 검사 범위·처리 행 수·성공 여부 | 장애 복구와 마지막 자동 연속성 검사가 실제 수행됐는지 추적한다. |
 
 `LIVE`는 DB에 마지막으로 기록된 상태값만 뜻하지 않는다. Dashboard 조회 시 마지막 Binance
 이벤트가 15초를 초과하면 `STALE`로 파생해, ETL 컨테이너가 중지된 경우에도 운영 화면에서
 실시간 수집 중단을 구분한다. `Recent recovery runs`의 `SUCCESS`는 과거 Backfill의 성공 기록이며,
-현재 수집기의 정상 상태를 의미하지 않는다.
+현재 수집기의 정상 상태를 의미하지 않는다. `RECONCILIATION`의 `SUCCESS`와 처리 행 수 `0`은
+해당 검사 범위에 공백이 없었다는 뜻이며, 값이 0이라도 검사 실패가 아니라 정상 결과다.
 
 ## Market context
 

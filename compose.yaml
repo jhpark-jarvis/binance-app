@@ -12,6 +12,7 @@ services:
       interval: 5s
       timeout: 3s
       retries: 20
+    restart: unless-stopped
 
   redis:
     image: redis:8-alpine
@@ -23,6 +24,7 @@ services:
       interval: 5s
       timeout: 3s
       retries: 20
+    restart: unless-stopped
 
   migrate:
     build: .
@@ -36,6 +38,9 @@ services:
   etl:
     build: .
     env_file: .env
+    environment:
+      RECONCILIATION_INTERVAL_SECONDS: ${RECONCILIATION_INTERVAL_SECONDS:-300}
+      ETL_HEALTH_MAX_EVENT_AGE_SECONDS: ${ETL_HEALTH_MAX_EVENT_AGE_SECONDS:-60}
     command: python -m app.etl.main
     depends_on:
       postgres:
@@ -45,6 +50,12 @@ services:
       migrate:
         condition: service_completed_successfully
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-m", "app.etl.health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 120s
 
   web:
     build: .
@@ -65,6 +76,8 @@ services:
       interval: 10s
       timeout: 5s
       retries: 10
+      start_period: 30s
+    restart: unless-stopped
 
 volumes:
   postgres_data:
