@@ -30,18 +30,31 @@
       </section>
 
       <section aria-labelledby="reconciliation-title">
-        <div class="section-heading"><h2 id="reconciliation-title">Reconciliation watch</h2></div>
-        <div id="reconciliation" class="checkpoint-grid"></div>
+        <details class="reconciliation-panel">
+          <summary>
+            <span id="reconciliation-title">Reconciliation watch</span>
+            <span class="summary-actions">
+              <span id="reconciliation-summary" class="badge warn">상태 확인 중</span>
+              <span class="disclosure-icon" aria-hidden="true"></span>
+            </span>
+          </summary>
+          <div id="reconciliation" class="checkpoint-grid"></div>
+        </details>
       </section>
 
       <section class="runs-section" aria-labelledby="backfill-title">
-        <div class="section-heading"><h2 id="backfill-title">Recent recovery runs</h2></div>
-        <div class="table-wrap">
-          <table>
-            <thead><tr><th>Symbol</th><th>Type</th><th>Status</th><th>Rows</th><th>Started</th></tr></thead>
-            <tbody id="runs"></tbody>
-          </table>
-        </div>
+        <details class="runs-panel">
+          <summary id="backfill-title">
+            <span>Recent recovery runs</span>
+            <span class="summary-actions"><span class="disclosure-icon" aria-hidden="true"></span></span>
+          </summary>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Symbol</th><th>Type</th><th>Status</th><th>Rows</th><th>Started</th></tr></thead>
+              <tbody id="runs"></tbody>
+            </table>
+          </div>
+        </details>
       </section>
     </main>
     <script>window.__INITIAL_DASHBOARD__ = {{ dashboard_json | safe }};</script>

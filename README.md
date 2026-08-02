@@ -145,10 +145,10 @@ docker compose logs -f etl web
 | Pipeline health | 심볼·소스별 상태와 마지막 이벤트 시간 | Binance 이벤트가 ETL까지 들어오는지 확인 |
 | Reconnects | 재연결 횟수 | 네트워크 또는 Binance 연결의 불안정성 확인 |
 | Market status | 최신가, 24시간 변동률, candle lag | 수집 데이터의 최신성 확인 |
-| Reconciliation watch | 심볼별 마지막 검사·성공·실패 시각, 마지막 오류, 연속 실패 수 | 주기적 완료 분봉 복구가 반복 실패하는지 확인 |
+| Reconciliation watch | 접힌 상태의 `SUCCESS`/`FAIL` 요약과 펼친 뒤 심볼별 검사·성공·실패 이력 | 주기적 완료 분봉 복구가 반복 실패하는지 확인 |
 | 종목 상세 차트 | 1분봉, 거래량, 누락 구간, 최근 체결, 종목별 복구 이력 | 시간축의 실제 데이터 연속성과 실시간 갱신 확인 |
 | Missing / hr | 최근 완료 1분봉 60개 중 누락 수 | 데이터 연속성 확인. 정상은 `0` |
-| Recent recovery runs | Backfill·주기 검사 상태, 처리 행 수, 시작 시각 | 재시작·재연결 복구와 마지막 자동 연속성 검사를 확인 |
+| Recent recovery runs | 접힌 Backfill·주기 검사 이력 | 재시작·재연결 복구와 마지막 자동 연속성 검사를 필요할 때 확인 |
 
 정상 운영에서는 수집 상태가 `LIVE`, 누락이 `0 missing / hr`에 가까운 상태여야 합니다.
 초기 Backfill 또는 연결 복구 중에는 일시적으로 `RECOVERED` 또는 `RECONNECTING` 상태가
@@ -165,9 +165,10 @@ docker compose logs -f etl web
 `Recent recovery runs`의 `SUCCESS`는 Backfill 또는 주기 검사 성공 이력일 뿐, 현재 ETL이
 실행 중이라는 뜻은 아닙니다.
 
-`Reconciliation watch`는 `RECONCILIATION` run 이력만 요약합니다. 최신 run이 `FAILED`일 때만
-마지막 성공 이후의 연속 실패 수를 표시합니다. 따라서 `연속 실패 0`은 최신 검사가 성공했거나
-실행 중이라는 뜻이지, 과거 장애 이력이 전혀 없다는 의미는 아닙니다.
+`Reconciliation watch`는 기본으로 접혀 있습니다. 헤더의 `SUCCESS`는 현재 모든 심볼의 최신
+검사가 성공했음을, `FAIL · 심볼`은 해당 심볼의 최신 검사가 실패했음을 뜻합니다. 펼치면
+`RECONCILIATION` run 이력의 마지막 성공·실패·오류와 연속 실패 수를 확인할 수 있습니다.
+연속 실패 수는 최신 run이 `FAILED`일 때만 마지막 성공 이후의 실패 수를 표시합니다.
 
 ### 종목 상세 차트 보기
 

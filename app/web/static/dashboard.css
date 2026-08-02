@@ -1,4 +1,5 @@
 :root { color-scheme: dark; font-family: Inter, ui-sans-serif, system-ui, sans-serif; background: #0b1020; color: #e7ecfa; }
+html { overflow-y: scroll; scrollbar-gutter: stable; }
 * { box-sizing: border-box; }
 body { margin: 0; }
 .container { max-width: 1180px; margin: 0 auto; padding: 40px 24px 64px; }
@@ -19,6 +20,7 @@ section { margin-top: 32px; }
 .checkpoint-card, .market-card { padding: 18px; }
 .checkpoint-card strong { display: block; margin: 14px 0 6px; font-variant-numeric: tabular-nums; }
 .reconciliation-card small { display: block; margin-top: 5px; }.reconciliation-error { color: #ff9ba1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.reconciliation-panel, .runs-panel { border: 1px solid #26335a; border-radius: 12px; background: linear-gradient(135deg, #111936, #0d142b); }.reconciliation-panel summary, .runs-panel summary { align-items: center; cursor: pointer; display: flex; font-size: 1rem; font-weight: 700; justify-content: space-between; list-style: none; padding: 16px 18px; }.reconciliation-panel summary::-webkit-details-marker, .runs-panel summary::-webkit-details-marker { display: none; }.summary-actions { align-items: center; display: inline-flex; gap: 10px; margin-left: auto; }.disclosure-icon { color: #93a1c6; font-size: .78rem; line-height: 1; text-align: center; width: 12px; }.disclosure-icon::before { content: "▼"; }.reconciliation-panel[open] .disclosure-icon::before, .runs-panel[open] .disclosure-icon::before { content: "▲"; }.reconciliation-panel #reconciliation { border-top: 1px solid #26335a; padding: 14px 18px 18px; }.runs-panel .table-wrap { border: 0; border-radius: 0; border-top: 1px solid #26335a; }
 .price { margin: 22px 0 14px; font-size: 1.8rem; font-weight: 700; letter-spacing: -.04em; font-variant-numeric: tabular-nums; }
 .market-meta { color: #aeb9d8; font-size: .85rem; }
 .badge { display: inline-block; border-radius: 999px; padding: 4px 8px; font-size: .67rem; font-weight: 700; letter-spacing: .04em; }

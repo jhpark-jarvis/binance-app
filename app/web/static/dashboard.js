@@ -38,6 +38,20 @@ function reconciliationMarkup(item) {
     </article>`;
 }
 
+function reconciliationSummary(items) {
+  const failed = items.filter((item) => item.latest_status === "FAILED");
+  if (failed.length > 0) {
+    return { status: "FAILED", text: `FAIL · ${failed.map((item) => item.symbol).join(", ")}` };
+  }
+  if (items.some((item) => item.latest_status === "RUNNING")) {
+    return { status: "RUNNING", text: "RUNNING" };
+  }
+  if (items.length === 0 || items.some((item) => item.latest_status === "NOT_RUN")) {
+    return { status: "STARTING", text: "대기 중" };
+  }
+  return { status: "SUCCESS", text: "SUCCESS" };
+}
+
 function marketMarkup(market) {
   return `
     <a class="market-card market-link" data-symbol="${market.symbol}" href="/markets/${market.symbol}" aria-label="${market.symbol} 상세 보기">
@@ -89,6 +103,10 @@ function render(data) {
   document.getElementById("reconciliation").innerHTML = data.reconciliation
     .map(reconciliationMarkup)
     .join("") || '<p class="empty">Waiting for reconciliation history…</p>';
+  const reconciliationSummaryBadge = document.getElementById("reconciliation-summary");
+  const reconciliationState = reconciliationSummary(data.reconciliation);
+  reconciliationSummaryBadge.className = `badge ${statusClass(reconciliationState.status)}`;
+  reconciliationSummaryBadge.textContent = reconciliationState.text;
 
   document.getElementById("runs").innerHTML = data.runs.map((run) => `
     <tr><td>${run.symbol}</td><td>${run.type}</td><td><span class="badge ${statusClass(run.status)}">${run.status}</span></td><td>${formatNumber.format(run.rows_processed)}</td><td>${run.started_at ? new Date(run.started_at).toLocaleString() : "-"}</td></tr>`).join("") || '<tr><td colspan="5" class="empty">No backfill runs yet.</td></tr>';
