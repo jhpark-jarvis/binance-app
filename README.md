@@ -265,6 +265,38 @@ docker compose down -v
 
 그 다음 `docker compose up --build -d`를 실행하면 빈 DB 기준 최초 Backfill을 다시 수행합니다.
 
+### PostgreSQL 백업과 격리 복원 검증
+
+PostgreSQL은 이 프로젝트의 유일한 영속 데이터 원천입니다. `docker compose down -v` 또는 Redis
+복구 절차와 달리, PostgreSQL 백업은 논리 dump(`pg_dump` custom format)로 생성하고 원본 volume을
+덮어쓰지 않는 별도 컨테이너에서 먼저 검증합니다. 생성되는 `backups/` 디렉터리는 Git에서 제외됩니다.
+
+**Windows PowerShell**
+
+```powershell
+.\scripts\backup_postgres.ps1
+$backup = Get-ChildItem backups -Filter *.dump | Sort-Object LastWriteTime -Descending | Select-Object -First 1
+.\scripts\verify_postgres_restore.ps1 -BackupPath $backup.FullName
+```
+
+**macOS / Linux (zsh 또는 bash)**
+
+```bash
+sh scripts/backup_postgres.sh
+backup=$(ls -t backups/*.dump | head -n 1)
+sh scripts/verify_postgres_restore.sh "$backup"
+```
+
+백업 스크립트는 `.dump`와 SHA-256 checksum 파일을 만들고, 복원 검증 스크립트는 임시
+PostgreSQL container·named volume에만 dump를 복원합니다. 이후 Alembic revision, 핵심 테이블,
+완료 1분봉 PK 중복을 검사한 뒤 임시 container·volume을 제거합니다. **이 스크립트는 운영
+PostgreSQL volume에 restore하지 않습니다.** 실제 운영 복원은 먼저 이 검증을 통과한 백업을 대상으로
+별도 변경 절차와 보관 정책을 승인한 뒤 수행해야 합니다.
+
+백업 파일은 이 저장소 밖의 접근 제어된 저장소에도 복제하고, 보관 주기·보존 기간은 운영 환경의
+데이터 보존 정책에 맞춰 결정하세요. 세부 절차와 제한은
+[PostgreSQL backup/restore runbook](docs/postgresql-backup-restore.md)을 참고합니다.
+
 ## 6. 환경 변수
 
 `.env.example`을 기준으로 설정합니다. 기본값은 로컬 Docker Compose 실행용입니다.
@@ -438,6 +470,7 @@ Binance API 접근이 네트워크·지역·방화벽 정책으로 차단됐는�
 - [작업·데이터·commit 규칙](docs/project-rules.md)
 - [기술 선택 근거와 작업 전 점검표](docs/preflight-decisions.md)
 - [Dashboard 지표 정의](docs/metrics.md)
+- [PostgreSQL 백업·격리 복원 runbook](docs/postgresql-backup-restore.md)
 - [현재 복구 범위와 수동 복구 절차 (RESTORE-PROCESS AS-IS)](docs/restore-process-as-is.md)
 - [다음 안정성 개선 계획과 완료 조건 (Reliability TO-BE)](docs/reliability-to-be.md)
 - [다른 AI Agent를 위한 handoff guide](AGENTS.md)

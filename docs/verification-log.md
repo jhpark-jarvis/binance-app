@@ -217,3 +217,22 @@ PostgreSQL의 실제 1분봉을 native Canvas로 그리며, `1h`, `6h`, `24h`, `
 제어 가능한 브라우저 탭이 없어 카드의 실제 픽셀 렌더링은 자동 확인하지 못했다. 또한 실제
 Binance REST 장애를 격리해 `FAILED` run을 생성하는 장애 주입은 아직 수행하지 않았다. 다만
 실패 상태·연속 실패 표시 규칙은 단위 테스트로 검증했다.
+
+## 2026-08-02 — Restore R4: PostgreSQL logical backup and isolated restore
+
+### Implemented behavior
+
+- `pg_dump --format=custom --compress=6` 기반의 Windows PowerShell·macOS/Linux backup script를 추가했다.
+- dump와 SHA-256 checksum은 Git에서 제외되는 `backups/`에 생성한다.
+- restore verification은 운영 Compose volume 대신 이름이 고유한 PostgreSQL 17 container·named volume에서
+  실행한다.
+- `alembic_version`, 5개 필수 테이블, `market_candles` 복합 PK 중복 0건을 확인한 뒤 임시 대상만 삭제한다.
+
+### Executed check
+
+- dump: `binance_ops_20260802T021213Z.dump` (7,817,400 bytes)
+- restored Alembic revision: `20260731_0001`
+- restored rows: `market_candles` 21,644 / `aggregate_trades` 384,697 /
+  `ingestion_checkpoints` 4 / `ingestion_runs` 224
+- duplicate completed-candle keys: 0
+- 검증 후 임시 restore volume이 남지 않았고, 원본 Compose 서비스는 모두 healthy 상태 유지

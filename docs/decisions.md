@@ -43,3 +43,12 @@ PostgreSQL에서 다시 검사한다. 공백이 발견되면 기존 REST Backfil
 주기 검사 결과는 `RECONCILIATION` ingestion run으로 남긴다. 데이터가 이미 연속적인 경우도
 0행 `SUCCESS` 이력을 남겨 “마지막 자동 검사 시각”을 운영자가 확인할 수 있게 한다. 이력은
 관측 용도이며 PostgreSQL의 캔들 데이터나 checkpoint를 대체하지 않는다.
+
+## AD-007: PostgreSQL recovery starts with a logical dump and isolated restore
+
+PostgreSQL volume을 곧바로 덮어쓰는 복원은 현재 상태와 복구 가능성을 함께 잃을 위험이 있다. 따라서
+`pg_dump` custom format을 표준 backup으로 사용하고, 항상 이름이 다른 PostgreSQL container·volume에
+먼저 `pg_restore`한다. 이 단계에서 Alembic revision, 필수 테이블, 캔들 PK 중복을 확인한다.
+
+실제 운영 volume 교체는 자동화하지 않는다. 데이터 손실 범위, 원본 보존, backup 보관 정책이 환경마다
+달라 별도 운영 승인 대상이기 때문이다.

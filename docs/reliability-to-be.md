@@ -36,7 +36,7 @@ Silent candle gap ────────┘             │
 | R1 | Highest | Compose 서비스 liveness | `web`, `postgres`, `redis` 종료 재기동 정책과 ETL health 관측을 검증 — 완료 |
 | R2 | Highest | 주기적 candle reconciliation | 연결이 유지된 상태의 인위적 1분봉 공백을 설정된 시간 안에 자동 복구 — 완료 |
 | R3 | High | 운영 상태·알림 | `STALE`/`FAILED`/반복 재연결/Backfill 실패를 운영자가 놓치지 않음 |
-| R4 | High | PostgreSQL backup/restore runbook | 백업본으로 별도 환경에 복원하고 데이터·schema를 검증 |
+| R4 | High | PostgreSQL backup/restore runbook | 백업본으로 별도 환경에 복원하고 데이터·schema를 검증 — 완료 |
 | R5 | Decision | Aggregate Trade 복구 계약 | Trade 공백을 허용할지, REST Backfill 범위를 도입할지 결정 |
 
 ## R1 — 서비스 liveness
@@ -108,13 +108,14 @@ Silent candle gap ────────┘             │
 ### 구현 방향
 
 - PostgreSQL named volume의 단순 복제와 논리 백업(`pg_dump`)의 사용 목적을 분리한다.
-- 백업 파일의 보관 위치·보관 주기·복원 연습 주기를 운영 환경별로 결정한다.
-- 복원은 기존 운영 volume을 덮어쓰지 않고 별도 이름의 검증 환경에서 먼저 수행한다.
-- schema revision, 캔들 건수, PK 중복, 최근 완료 분봉 누락 여부를 복원 검증 항목으로 둔다.
+- Windows PowerShell·macOS/Linux shell용 backup·격리 restore 검증 스크립트를 제공한다.
+- 복원은 기존 운영 volume을 덮어쓰지 않고 이름이 고유한 별도 container·volume에서 먼저 수행한다.
+- `alembic_version`, 필수 테이블, 캔들 PK 중복을 자동 검증하고 row count를 출력한다.
+- backup 보관 위치·보관 주기·복원 연습 주기는 운영 환경별로 결정한다. `backups/`는 Git 대상이 아니다.
 
 ### 완료 검증
 
-- 별도 PostgreSQL volume 또는 컨테이너에 복원한 뒤 Alembic revision과 데이터 정합성을 확인한다.
+- 별도 PostgreSQL volume 또는 컨테이너에 복원한 뒤 Alembic revision과 데이터 정합성을 확인한다. — 완료
 
 ## R5 — Aggregate Trade contract decision
 
@@ -137,7 +138,7 @@ R5를 결정하기 전에는 Trade 행 수를 캔들 연속성의 완료 기준�
 
 ## Next implementation recommendation
 
-R1·R2가 완료됐으므로 다음 작업은 **R3 운영 상태·알림**이다. 우선 Dashboard 또는 상태 API에서
-마지막 reconciliation 시각·성공/실패·연속 실패 횟수를 분명히 보여 주고, 외부 알림 채널은 그
-관측 기준이 안정된 뒤 선택한다. Redis AOF 손상 자동 수리나 PostgreSQL volume 덮어쓰기는 이
-단계에도 포함하지 않는다.
+R1·R2·R4가 완료됐으므로 다음 작업은 **R5 Aggregate Trade 복구 계약 결정**이다. 장애 시간의
+Trade 공백을 허용하고 완료 1분봉만 연속성 기준으로 유지할지, Aggregate Trade REST Backfill의
+범위·rate limit·대량 적재 정책을 도입할지 명시적으로 선택한다. R3의 실제 Binance REST 장애
+주입 검증도 격리 가능한 환경에서 병행한다.
