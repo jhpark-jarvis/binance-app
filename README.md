@@ -37,6 +37,33 @@ Docker Compose는 아래 다섯 개의 서비스를 실행합니다.
 | `etl` | Binance 실시간 수집, Backfill, 재연결, 주기적 연속성 검사 | `running (healthy)` |
 | `web` | FastAPI Dashboard와 상태 조회 API | `running (healthy)` |
 
+이 프로젝트는 화면 장식보다 수집 데이터의 연속성, 복구 가능성, 운영 가시성을 우선한다.
+각 기능의 데이터 기준과 선택 근거는 아래 실행·복구·백업 절에서 함께 설명한다.
+
+### 이 구조와 기능을 선택한 이유
+
+| 고려한 문제 | 구현한 기능 | 선택 근거 |
+|---|---|---|
+| Web 요청과 장기 실행 수집기의 장애를 분리 | Python ETL Daemon / FastAPI Web App 분리 | Dashboard 재시작이 수집을 멈추거나, 수집 재연결이 Web 요청을 막지 않게 한다. |
+| 장애 뒤 데이터 누락 | 완료 1분봉 REST Backfill·overlap upsert·재검증 | Binance Kline REST는 시간 범위 조회가 가능해 누락 구간을 증명하고 복구할 수 있다. |
+| 연결은 살아 있지만 일부 캔들이 비는 경우 | 주기적 reconciliation | 재연결만으로 찾을 수 없는 조용한 공백도 발견·복구한다. |
+| 실시간 화면 갱신과 영속 데이터의 역할 혼동 | Redis Pub/Sub·SSE는 알림, PostgreSQL은 조회 원천 | Redis 재시작이나 Pub/Sub 유실 뒤에도 화면을 다시 열면 DB 기준으로 상태를 복원한다. |
+| 동일 이벤트 중복 수신 | PostgreSQL 복합 PK와 UPSERT | WebSocket 재전송·Backfill overlap에도 중복 행 없이 멱등적으로 적재한다. |
+| 저장소·호스트 장애로 인한 영속 데이터 손실 | 논리 백업·checksum·격리 복원·선택적 보관 정리 | 운영 volume을 바로 덮어쓰지 않고, 먼저 복원 가능한 백업인지 증명한다. |
+
+### 데이터가 들어오고 확정되는 방식
+
+`@kline_1m`과 `@aggTrade` WebSocket 이벤트는 ETL 내부 큐를 거쳐 PostgreSQL에 저장되고, Redis Pub/Sub와
+SSE는 Dashboard 갱신 신호만 전달합니다. 화면은 PostgreSQL API를 다시 조회하므로 Redis 재시작 뒤에도
+영속 데이터 기준으로 복원됩니다.
+
+- 진행 중 1분봉은 같은 `(symbol, interval, open_time)` 행에 upsert됩니다.
+- Binance의 최종 `is_closed=true` 이벤트에 포함된 OHLCV로 같은 행이 완료 상태가 됩니다. ETL이 체결을
+  모아 자체적으로 캔들을 마감하지는 않습니다.
+- Aggregate Trade는 `(symbol, aggregate_trade_id)` 기준 insert하고 중복 수신은 무시합니다. 이는 최근
+  체결 관측용이며 장애 시간의 Trade 공백을 복구 계약으로 삼지 않습니다.
+- Backfill은 이미 완료된 1분봉만 REST API의 `startTime`·`endTime` 범위로 받아 저장합니다.
+
 ## 2. 사전 준비
 
 처음 실행하기 전에 아래를 준비합니다.
@@ -271,27 +298,73 @@ PostgreSQL은 이 프로젝트의 유일한 영속 데이터 원천입니다. `d
 복구 절차와 달리, PostgreSQL 백업은 논리 dump(`pg_dump` custom format)로 생성하고 원본 volume을
 덮어쓰지 않는 별도 컨테이너에서 먼저 검증합니다. 생성되는 `backups/` 디렉터리는 Git에서 제외됩니다.
 
-**Windows PowerShell**
+백업 스크립트는 PostgreSQL이 `healthy`일 때만 실행됩니다. 실행 중복을 막는 lock, 임시 파일에서
+완성 파일로의 원자적 이동, SHA-256 checksum 자체 검증을 수행합니다. 기본값은 기존 백업을 삭제하지
+않는 안전 모드이며, 보관 기간을 명시한 경우에만 만료된 `binance_ops_*.dump`와 checksum 쌍을 정리합니다.
+
+**Windows PowerShell — 수동 백업과 즉시 격리 복원 검증**
 
 ```powershell
-.\scripts\backup_postgres.ps1
-$backup = Get-ChildItem backups -Filter *.dump | Sort-Object LastWriteTime -Descending | Select-Object -First 1
-.\scripts\verify_postgres_restore.ps1 -BackupPath $backup.FullName
+.\scripts\backup_postgres.ps1 -VerifyRestore
 ```
 
-**macOS / Linux (zsh 또는 bash)**
+**macOS / Linux (zsh 또는 bash) — 수동 백업과 즉시 격리 복원 검증**
 
 ```bash
-sh scripts/backup_postgres.sh
-backup=$(ls -t backups/*.dump | head -n 1)
-sh scripts/verify_postgres_restore.sh "$backup"
+sh scripts/backup_postgres.sh --verify-restore
 ```
 
-백업 스크립트는 `.dump`와 SHA-256 checksum 파일을 만들고, 복원 검증 스크립트는 임시
-PostgreSQL container·named volume에만 dump를 복원합니다. 이후 Alembic revision, 핵심 테이블,
+보관 기간을 14일로 명시하는 예시는 다음과 같습니다. `0`은 삭제하지 않는 기본값입니다.
+
+```powershell
+.\scripts\backup_postgres.ps1 -RetentionDays 14
+```
+
+```bash
+sh scripts/backup_postgres.sh --retention-days 14
+```
+
+백업 스크립트는 `.dump`와 SHA-256 checksum 파일을 만들고, `-VerifyRestore`/`--verify-restore`를
+지정하면 임시 PostgreSQL container·named volume에 복원합니다. 이후 Alembic revision, 핵심 테이블,
 완료 1분봉 PK 중복을 검사한 뒤 임시 container·volume을 제거합니다. **이 스크립트는 운영
 PostgreSQL volume에 restore하지 않습니다.** 실제 운영 복원은 먼저 이 검증을 통과한 백업을 대상으로
 별도 변경 절차와 보관 정책을 승인한 뒤 수행해야 합니다.
+
+### 자동 백업 스케줄 설정
+
+백업 파일은 Docker volume이 아닌 호스트의 `backups/`에 생성됩니다. 따라서 스케줄은 Compose 안에
+숨기지 않고 호스트의 Task Scheduler 또는 cron에 등록합니다. 호스트 장애에도 대비하려면 생성된
+`.dump`와 `.sha256`을 별도의 접근 제어된 저장소로 복제해야 합니다.
+
+아래 예시는 매일 03:00 백업·14일 보관, 매주 일요일 04:00 격리 복원 검증입니다. 시간대, 보관 기간,
+외부 복제 위치는 운영 정책에 맞게 바꾸세요.
+
+**Windows PowerShell — 현재 사용자 Task Scheduler 등록 예시**
+
+```powershell
+$projectPath = (Get-Location).Path
+$dailyAction = New-ScheduledTaskAction -Execute "powershell.exe" -Argument "-NoProfile -File `"$projectPath\scripts\backup_postgres.ps1`" -RetentionDays 14" -WorkingDirectory $projectPath
+$dailyTrigger = New-ScheduledTaskTrigger -Daily -At 3:00AM
+Register-ScheduledTask -TaskName "BinancePostgresDailyBackup" -Action $dailyAction -Trigger $dailyTrigger -Description "Binance Operations PostgreSQL logical backup" -Force
+```
+
+복원 검증은 백업보다 Docker·디스크를 더 사용하므로 별도 주간 작업으로 등록합니다.
+
+```powershell
+$weeklyAction = New-ScheduledTaskAction -Execute "powershell.exe" -Argument "-NoProfile -File `"$projectPath\scripts\backup_postgres.ps1`" -RetentionDays 14 -VerifyRestore" -WorkingDirectory $projectPath
+$weeklyTrigger = New-ScheduledTaskTrigger -Weekly -DaysOfWeek Sunday -At 4:00AM
+Register-ScheduledTask -TaskName "BinancePostgresWeeklyRestoreVerify" -Action $weeklyAction -Trigger $weeklyTrigger -Description "Binance Operations PostgreSQL isolated restore verification" -Force
+```
+
+**macOS / Linux — crontab 등록 예시**
+
+```cron
+0 3 * * * cd /absolute/path/to/binance-app && /bin/sh scripts/backup_postgres.sh --retention-days 14 >> backups/backup-schedule.log 2>&1
+0 4 * * 0 cd /absolute/path/to/binance-app && /bin/sh scripts/backup_postgres.sh --retention-days 14 --verify-restore >> backups/backup-schedule.log 2>&1
+```
+
+`crontab -e`로 등록하며, `/absolute/path/to/binance-app`은 실제 절대 경로로 바꿉니다. 스케줄러는
+Docker를 실행할 수 있는 사용자 계정으로 등록해야 합니다.
 
 백업 파일은 이 저장소 밖의 접근 제어된 저장소에도 복제하고, 보관 주기·보존 기간은 운영 환경의
 데이터 보존 정책에 맞춰 결정하세요. 세부 절차와 제한은
@@ -318,6 +391,9 @@ PostgreSQL volume에 restore하지 않습니다.** 실제 운영 복원은 먼�
 | `BINANCE_WS_URL` | `wss://stream.binance.com:9443/stream` | Binance combined WebSocket stream URL |
 | `WEB_HOST` | `0.0.0.0` | FastAPI bind host |
 | `WEB_PORT` | `8000` | FastAPI container port |
+
+백업 스크립트의 `RetentionDays`/`--retention-days`, `VerifyRestore`/`--verify-restore`는 `.env`가 아닌
+명령행 옵션입니다. 보관 기간은 삭제 정책이므로 사용자 환경에 맞춰 명시적으로 선택합니다.
 
 ## 7. 데이터 복구 방식
 

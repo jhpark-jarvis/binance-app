@@ -40,6 +40,8 @@ Binance Spot의 `BTCUSDT`, `ETHUSDT` 실시간 체결·시세를 수집하고, �
 3. API 제한 응답에는 `Retry-After`와 지수 백오프를 준수한다.
 4. Dashboard는 가격보다 수집 상태·데이터 지연·누락 여부를 우선 표시한다.
 5. 완료 기준에는 강제 중지 후 Backfill 복구 검증이 반드시 포함된다.
+6. PostgreSQL 백업은 논리 dump와 checksum을 함께 생성하고, 운영 volume이 아닌 격리 대상에서 먼저
+   복원 검증한다. 보관 파일 삭제는 명시적으로 설정한 기간에만 수행한다.
 
 ## Working rules
 

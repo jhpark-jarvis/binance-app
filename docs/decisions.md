@@ -61,3 +61,13 @@ Aggregate Trade 공백은 허용하며, 시작·재연결·주기 reconciliation
 
 Aggregate Trade REST Backfill은 체결 단위 완전성 요구가 생길 때 별도 작업으로 도입한다. 그때는 시간과
 ID 경계, 페이지네이션, rate limit, 보관 기간 및 대량 적재 운영 비용을 함께 결정해야 한다.
+
+## AD-009: PostgreSQL backup is host-scheduled, checksum-verified, and restored only in isolation
+
+백업은 Docker Compose 내부의 scheduler가 아니라 host Task Scheduler 또는 cron에서 실행한다. logical
+dump와 checksum은 Docker volume 밖의 `backups/`에 남기고, host 장애에 대비한 외부 저장소 복제 위치와
+보관 기간은 운영 환경이 결정한다.
+
+backup script는 healthy PostgreSQL에서만 실행하고, 동시 실행을 막으며, 임시 파일과 checksum 검증을
+통과한 dump만 최종 파일로 남긴다. 보관 파일 삭제는 기본 비활성화이며 명시한 기간에만 제한한다.
+복원은 항상 이름이 다른 container·volume에서 검증하고, 운영 PostgreSQL volume 교체는 자동화하지 않는다.

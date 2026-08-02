@@ -35,6 +35,7 @@ Binance REST / WebSocket
 4. 운영자가 연결 상태, 최근 수신 시각, 누락 여부, 백필 결과를 Dashboard에서 확인한다.
 5. 운영자가 종목별 상세 화면에서 실제 1분봉 차트와 데이터 공백을 확인한다.
 6. Docker Compose로 개발·검증 환경을 재현한다.
+7. PostgreSQL 논리 백업을 host scheduler로 자동 실행할 수 있고, 격리 restore verification과 보관 정책을 운영자가 명시한다.
 
 ## Definition of done
 
@@ -46,4 +47,5 @@ Binance REST / WebSocket
 - ETL과 Web이 독립 컨테이너로 실행된다.
 - Dashboard의 운영 지표가 DB 상태와 일치한다.
 - 종목별 상세 화면이 PostgreSQL의 실제 1분봉을 그리고, 누락된 완료 분봉을 공백으로 표현한다.
+- 백업 script가 healthy PostgreSQL에서 checksum을 가진 logical dump를 만들고, 격리 restore verification을 수행한다.
 - README, 결정 근거, Agent handoff, 검증 결과가 최신이다.

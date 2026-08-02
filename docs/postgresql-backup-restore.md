@@ -16,6 +16,7 @@ PostgreSQL은 이 프로젝트의 캔들·체결·checkpoint·복구 이력의 �
 3. 복원은 항상 이름이 다른 임시 container·volume에서 먼저 검증한다.
 4. 검증 스크립트가 만드는 임시 container·volume만 자동 제거한다.
 5. `backups/`는 Git에서 제외된다. 백업을 저장소에 commit하거나 비밀번호와 함께 공유하지 않는다.
+6. 보관 정리는 기본으로 비활성화한다. 보관 기간을 명시한 경우에만 백업·checksum 쌍을 삭제한다.
 
 ## Logical dump와 named volume의 역할
 
@@ -28,8 +29,9 @@ PostgreSQL은 이 프로젝트의 캔들·체결·checkpoint·복구 이력의 �
 
 ## 백업 생성
 
-사전 조건은 Docker Compose의 `postgres` service가 healthy인 것이다. 스크립트는 container 내부의
-`pg_dump`로 custom-format dump를 만든 다음 `backups/`로 복사하고 container의 임시 파일을 제거한다.
+사전 조건은 Docker Compose의 `postgres` service가 healthy인 것이다. 스크립트는 실행 중복 방지 lock을
+획득한 뒤 container 내부의 `pg_dump`로 custom-format dump를 만든다. 호스트에는 `.partial` 파일로
+먼저 복사하고, checksum 생성·검증까지 성공한 경우에만 최종 `.dump` 이름으로 이동한다.
 
 ### Windows PowerShell
 
@@ -43,6 +45,20 @@ PostgreSQL은 이 프로젝트의 캔들·체결·checkpoint·복구 이력의 �
 sh scripts/backup_postgres.sh
 ```
 
+기본값은 보관 정리를 하지 않는다. `RetentionDays`/`--retention-days`를 명시하면 해당 일수보다 오래된
+`binance_ops_*.dump`와 `.sha256` 쌍만 삭제한다.
+
+```powershell
+.\scripts\backup_postgres.ps1 -RetentionDays 14 -VerifyRestore
+```
+
+```bash
+sh scripts/backup_postgres.sh --retention-days 14 --verify-restore
+```
+
+`-VerifyRestore`/`--verify-restore`는 백업 직후 격리 복원 검증까지 수행한다. backup·checksum·복원 중
+하나라도 실패하면 보관 정리는 실행하지 않는다.
+
 출력 파일은 다음과 같다.
 
 ```text
@@ -52,6 +68,21 @@ backups/binance_ops_YYYYMMDDTHHMMSSZ.dump.sha256
 
 Windows에서는 `Get-FileHash -Algorithm SHA256 <dump path>`, Linux에서는 `sha256sum -c <checksum path>`,
 macOS에서는 `shasum -a 256 <dump path>`로 파일 무결성을 확인할 수 있다.
+
+## 자동 실행과 보관 정책
+
+이 프로젝트는 Compose 내부에 별도 cron container를 넣지 않는다. 백업 결과를 Docker volume이 아닌 호스트
+또는 외부 저장소에 남겨야 하고, 실행 권한·보관 기간·외부 복제 위치는 운영 환경마다 다르기 때문이다.
+대신 backup script를 Windows Task Scheduler 또는 macOS/Linux cron에서 안전하게 호출할 수 있게 한다.
+
+- 권장 최소 주기: 하루 1회 logical dump
+- 권장 복원 연습: 주 1회 최신 dump의 격리 restore verification
+- 예시 보관 기간: 14일. 단, 실제 기간은 RPO·디스크 용량·조직 보존 정책으로 결정한다.
+- `RetentionDays=0`/`--retention-days 0`은 삭제하지 않는 기본값이다.
+- 백업이 성공해도 같은 호스트에만 있으면 호스트 장애를 막을 수 없다. checksum 파일과 함께 별도 저장소로
+  복제하고, 복제 성공 여부도 운영 절차에 포함한다.
+
+README의 [자동 백업 스케줄 설정](../README.md#자동-백업-스케줄-설정)에 Windows·macOS/Linux 등록 예시가 있다.
 
 ## 격리 복원 검증
 

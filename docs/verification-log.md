@@ -273,3 +273,27 @@ Binance REST 장애를 격리해 `FAILED` run을 생성하는 장애 주입은 �
   격리 Web의 `/health`는 `ok`였다.
 - 검증 후 `binance-r3verify` 컨테이너·network·두 named volume을 제거했다. 운영 `binance-app`의
   `postgres`, `redis`, `etl`, `web`은 모두 healthy 상태를 유지했다.
+
+## 2026-08-02 — Restore R6: PostgreSQL backup automation
+
+### Implemented behavior
+
+- Windows PowerShell·macOS/Linux shell backup script에 PostgreSQL health gate, 동시 실행 lock,
+  `.partial` 파일의 최종 dump 승격, SHA-256 checksum 재검증을 추가했다.
+- 보관 정리는 기본값 `0`에서 비활성화하고, 명시한 기간보다 오래된 `binance_ops_*.dump`와 checksum
+  쌍만 정리하도록 제한했다.
+- `VerifyRestore`/`--verify-restore` 옵션으로 backup 직후 기존 격리 restore verification을 연결했다.
+- README와 runbook에 일간 백업·주간 restore verification의 Windows Task Scheduler 및 cron 예시를 추가했다.
+
+### Executed check
+
+- PowerShell script 구문 검사와 POSIX shell script의 `sh -n` 검사를 통과했다.
+- 실제 운영 PostgreSQL에서 `RetentionDays=0`, `VerifyRestore`로 backup을 실행했다.
+- dump: `binance_ops_20260802T051013Z.dump`; checksum 생성·재검증 성공
+- 격리 restore: Alembic revision `20260731_0001`, `market_candles` 22,000건,
+  `aggregate_trades` 459,241건, `ingestion_checkpoints` 4건, `ingestion_runs` 271건,
+  완료 1분봉 중복 키 0건
+- 원본 Compose 서비스는 그대로 유지됐고, retention 기본값으로 기존 backup은 삭제하지 않았다.
+
+실행 정책상 임시 lock·만료 backup 파일을 만들고 삭제하는 검증은 자동 수행하지 못했다. 해당 경로는
+명시적으로 보관 기간을 선택한 운영 환경에서 한 번 수동 검증한다.

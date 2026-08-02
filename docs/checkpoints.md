@@ -26,6 +26,7 @@
 | R3 | Observability | reconciliation 상태·실패 추세 Dashboard/API 노출, REST 장애 격리 주입 검증 | 검증 완료 |
 | R4 | PostgreSQL backup/restore | 별도 환경 복원과 schema·데이터 정합성 검증 | 검증 완료 |
 | R5 | Trade recovery decision | Aggregate Trade 공백 허용, 완료 1분봉만 복구·연속성 기준으로 확정 | 결정 완료 |
+| R6 | Backup automation | health gate·lock·checksum·선택적 보관 정리와 host scheduler 실행 절차 | 구현·기본 검증 완료 |
 
 ## Mandatory end-to-end scenarios
 

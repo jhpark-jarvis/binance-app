@@ -38,6 +38,7 @@ Silent candle gap ────────┘             │
 | R3 | Done | 운영 상태·알림 | `STALE`/`FAILED`/반복 재연결/Backfill 실패를 Dashboard·API·로그에서 확인 — 완료 |
 | R4 | High | PostgreSQL backup/restore runbook | 백업본으로 별도 환경에 복원하고 데이터·schema를 검증 — 완료 |
 | R5 | Done | Aggregate Trade 복구 계약 | Trade 공백 허용, 완료 1분봉만 연속성·복구 대상 — 결정 완료 |
+| R6 | High | PostgreSQL backup automation | health gate·lock·checksum·선택적 보관 정리와 host scheduler 절차 — 구현·기본 검증 완료 |
 
 ## R1 — 서비스 liveness
 
@@ -143,6 +144,25 @@ ETL 또는 WebSocket 장애 시간의 Trade 공백은 허용한다. 재시작·�
 체결 단위의 감사·포렌식, 체결 기반 전략 분석, 또는 Trade 공백 자체를 장애 기준으로 삼아야 하는
 요구가 생기면 Aggregate Trade REST Backfill의 범위·페이지네이션·rate limit·보관 기간을 별도 설계한다.
 
+## R6 — PostgreSQL backup automation
+
+### 구현 방향
+
+- 기존 PowerShell·POSIX shell backup script를 host scheduler에서 안전하게 호출할 수 있도록 유지한다.
+- PostgreSQL이 `healthy`일 때만 dump를 시작하고, 동시 실행은 lock으로 막는다.
+- host에는 임시 파일로 먼저 복사하고 checksum 검증 뒤 최종 dump로 승격한다.
+- 보관 삭제는 기본 비활성화(`0`)이며, 운영자가 명시한 기간보다 오래된 프로젝트 dump·checksum 쌍만
+  삭제한다.
+- 일간 backup과 주간 격리 restore verification의 Task Scheduler·cron 등록 예시를 README에 제공한다.
+- Compose 내부 scheduler나 운영 volume에 대한 자동 restore는 도입하지 않는다.
+
+### 완료 검증
+
+1. healthy PostgreSQL에서 dump·checksum 생성과 checksum 검증이 성공한다.
+2. `VerifyRestore` 옵션에서 기존 격리 restore verification이 성공한다.
+3. retention `0`에서 기존 파일이 지워지지 않고, 명시한 retention에서는 만료 쌍만 정리한다.
+4. backup 중복 실행이 lock으로 거절되는지 확인한다.
+
 ## Implementation rules
 
 1. R1부터 R4까지는 분리된 commit point로 진행한다.
@@ -153,5 +173,6 @@ ETL 또는 WebSocket 장애 시간의 Trade 공백은 허용한다. 재시작·�
 
 ## Next implementation recommendation
 
-R1부터 R5까지 완료됐다. 이후 개선은 외부 알림 채널(Slack·메일·모니터링), 다중 ETL 리더, 또는
-체결 단위 완전성이 필요한 경우의 Aggregate Trade Backfill을 별도 요구사항으로 결정한 뒤 진행한다.
+R1부터 R5까지 완료됐다. 다음 작업은 R6 PostgreSQL backup automation이다. 이후 개선은 외부 알림
+채널(Slack·메일·모니터링), 다중 ETL 리더, 또는 체결 단위 완전성이 필요한 경우의 Aggregate Trade
+Backfill을 별도 요구사항으로 결정한 뒤 진행한다.

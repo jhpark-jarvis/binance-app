@@ -13,6 +13,7 @@
 | Redis role | Pub/Sub + short TTL cache | 분리된 ETL/Web의 실시간 전달을 단순하게 만들며 DB를 대체하지 않는다. | 메시지 영속 전달 또는 다중 소비자 재처리가 필요할 때 Redis Streams/queue 검토 |
 | Dashboard UI | FastAPI + Jinja2 + small JS + native Canvas | 수집·복구 기능을 먼저 검증하면서도 외부 프레임워크 없이 종목별 캔들·거래량·누락 구간을 표현한다. | 고급 필터·지표·상호작용 요구가 커질 때 |
 | Deployment | Docker Compose | 로컬 재현, VM 이전, 서비스 분리와 향후 확장을 준비한다. | 오케스트레이션·고가용성 요구가 생길 때 |
+| Backup automation | Host scheduler + logical dump + opt-in retention | 백업을 Docker volume 밖에 남기고, 운영자만 보관 기간·외부 복제 위치를 결정하게 한다. | 중앙 백업 플랫폼 또는 클라우드 object storage가 표준이 될 때 |
 
 ## Before implementation checklist
 
