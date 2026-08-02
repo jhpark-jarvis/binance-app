@@ -395,6 +395,24 @@ Docker를 실행할 수 있는 사용자 계정으로 등록해야 합니다.
 백업 스크립트의 `RetentionDays`/`--retention-days`, `VerifyRestore`/`--verify-restore`는 `.env`가 아닌
 명령행 옵션입니다. 보관 기간은 삭제 정책이므로 사용자 환경에 맞춰 명시적으로 선택합니다.
 
+## 향후 확장 방향
+
+현재 프로젝트는 로컬 Compose 환경에서 데이터 수집·완료 1분봉 복구·운영 관측·논리 백업과 격리 복원
+검증까지 제공한다. 아래 항목은 현재 자동으로 활성화되는 기능이 아니라, 운영 규모와 정책이 정해졌을 때
+같은 구조를 기반으로 확장할 수 있는 방향이다.
+
+| 확장 방향 | 가능한 구현 | 도입 시 결정할 사항 |
+|---|---|---|
+| 백업 자동 실행 | Windows Task Scheduler 또는 macOS/Linux cron으로 일간 dump·주간 격리 복원 검증 등록 | 실행 계정, 실행 시간, 보관 기간, 장애 시 재실행 정책 |
+| 외부 백업 보관 | NAS, S3 호환 object storage, 클라우드 드라이브로 dump·checksum 복제 | 암호화, 접근 제어, 지역 분리, RPO/RTO, 복제 성공 확인 방법 |
+| 운영 알림 | ETL unhealthy, Backfill·reconciliation 실패, backup 실패를 Slack·메일·모니터링으로 전파 | 알림 채널, 심각도, 중복 억제 시간, 담당자·on-call 정책 |
+| 데이터 보관·성능 | Aggregate Trade 보관 기간, 삭제 작업, 월 단위 파티셔닝 또는 시계열 DB 검토 | 보존 의무, 디스크 예산, 조회 성능, 삭제 승인 절차 |
+| 배포·가용성 | CI 검증, 이미지 배포, 다중 ETL 리더와 distributed lock, managed PostgreSQL 검토 | 배포 환경, 리더 선출, 장애 조치, 비용과 관측 도구 |
+
+특히 백업은 host scheduler 등록만으로도 자동화할 수 있지만, **같은 호스트의 `backups/`에만 남겨서는
+호스트 전체 장애를 복구할 수 없다.** 운영 환경에서는 checksum과 함께 외부 저장소로 복제하고, 주기적인
+격리 restore verification 결과를 확인하는 방식으로 확장하는 것을 권장한다.
+
 ## 7. 데이터 복구 방식
 
 데이터 연속성의 기준은 **완료된 1분봉**입니다.
