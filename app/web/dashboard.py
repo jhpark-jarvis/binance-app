@@ -2,7 +2,7 @@ import time
 from datetime import UTC, datetime
 from decimal import Decimal
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.models import AggregateTrade, IngestionCheckpoint, IngestionRun, MarketCandle
@@ -63,16 +63,39 @@ def missing_completed_open_times(
     ]
 
 
+def reconciliation_observation(
+    symbol: str,
+    latest_run: IngestionRun | None,
+    last_success: IngestionRun | None,
+    last_failure: IngestionRun | None,
+    failures_since_success: int,
+) -> dict[str, object]:
+    """Build a compact operational view from persisted reconciliation run history."""
+    latest_status = latest_run.status if latest_run else "NOT_RUN"
+    return {
+        "symbol": symbol,
+        "latest_status": latest_status,
+        "latest_started_at": latest_run.started_at.isoformat() if latest_run else None,
+        "latest_finished_at": latest_run.finished_at.isoformat() if latest_run else None,
+        "last_success_at": last_success.finished_at.isoformat() if last_success else None,
+        "last_failure_at": last_failure.finished_at.isoformat() if last_failure else None,
+        "last_failure_error": last_failure.error_message if last_failure else None,
+        "consecutive_failures": failures_since_success if latest_status == "FAILED" else 0,
+    }
+
+
 async def build_dashboard(session: AsyncSession, symbols: tuple[str, ...]) -> dict[str, object]:
     now_ms = int(time.time() * 1000)
     markets = [await _market_summary(session, symbol, now_ms) for symbol in symbols]
     checkpoints = await _checkpoints(session, now_ms)
     runs = await _recent_runs(session)
+    reconciliation = await _reconciliation_observations(session, symbols)
     return {
         "generated_at": datetime.now(UTC).isoformat(),
         "markets": markets,
         "checkpoints": checkpoints,
         "runs": runs,
+        "reconciliation": reconciliation,
     }
 
 
@@ -306,3 +329,46 @@ async def _recent_runs(session: AsyncSession) -> list[dict[str, object]]:
         }
         for run in runs
     ]
+
+
+async def _reconciliation_observations(
+    session: AsyncSession, symbols: tuple[str, ...]
+) -> list[dict[str, object]]:
+    observations = []
+    for symbol in symbols:
+        base_filters = (
+            IngestionRun.symbol == symbol,
+            IngestionRun.run_type == "RECONCILIATION",
+        )
+        latest_run = await session.scalar(
+            select(IngestionRun)
+            .where(*base_filters)
+            .order_by(IngestionRun.started_at.desc())
+            .limit(1)
+        )
+        last_success = await session.scalar(
+            select(IngestionRun)
+            .where(*base_filters, IngestionRun.status == "SUCCESS")
+            .order_by(IngestionRun.started_at.desc())
+            .limit(1)
+        )
+        last_failure = await session.scalar(
+            select(IngestionRun)
+            .where(*base_filters, IngestionRun.status == "FAILED")
+            .order_by(IngestionRun.started_at.desc())
+            .limit(1)
+        )
+        failure_filters = [*base_filters, IngestionRun.status == "FAILED"]
+        if last_success is not None:
+            failure_filters.append(IngestionRun.started_at > last_success.started_at)
+        failures_since_success = await session.scalar(select(func.count()).where(*failure_filters))
+        observations.append(
+            reconciliation_observation(
+                symbol,
+                latest_run,
+                last_success,
+                last_failure,
+                failures_since_success or 0,
+            )
+        )
+    return observations

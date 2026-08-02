@@ -1,6 +1,7 @@
+from datetime import UTC, datetime
 from decimal import Decimal
 
-from app.core.models import IngestionCheckpoint
+from app.core.models import IngestionCheckpoint, IngestionRun
 from app.etl.collector import ONE_MINUTE_MS as COLLECTOR_ONE_MINUTE_MS
 from app.etl.collector import first_missing_open_time
 from app.etl.health import checkpoint_health_issues
@@ -13,6 +14,7 @@ from app.web.dashboard import (
     derive_checkpoint_status,
     detail_window_minutes,
     missing_completed_open_times,
+    reconciliation_observation,
 )
 
 
@@ -127,3 +129,32 @@ def test_etl_health_rejects_a_stale_checkpoint() -> None:
         "BTCUSDT/KLINE_1M: event age=61s",
         "BTCUSDT/AGG_TRADE: event age=61s",
     ]
+
+
+def test_reconciliation_observation_exposes_consecutive_failures_only_when_latest_failed() -> None:
+    last_success = IngestionRun(
+        symbol="BTCUSDT",
+        run_type="RECONCILIATION",
+        status="SUCCESS",
+        started_at=datetime(2026, 8, 2, 1, 0, tzinfo=UTC),
+        finished_at=datetime(2026, 8, 2, 1, 0, 1, tzinfo=UTC),
+    )
+    last_failure = IngestionRun(
+        symbol="BTCUSDT",
+        run_type="RECONCILIATION",
+        status="FAILED",
+        started_at=datetime(2026, 8, 2, 1, 5, tzinfo=UTC),
+        finished_at=datetime(2026, 8, 2, 1, 5, 1, tzinfo=UTC),
+        error_message="Binance timeout",
+    )
+
+    failed_observation = reconciliation_observation(
+        "BTCUSDT", last_failure, last_success, last_failure, 2
+    )
+    successful_observation = reconciliation_observation(
+        "BTCUSDT", last_success, last_success, last_failure, 2
+    )
+
+    assert failed_observation["consecutive_failures"] == 2
+    assert failed_observation["last_failure_error"] == "Binance timeout"
+    assert successful_observation["consecutive_failures"] == 0

@@ -188,3 +188,32 @@ PostgreSQL의 실제 1분봉을 native Canvas로 그리며, `1h`, `6h`, `24h`, `
 `RECONCILIATION SUCCESS`로 마감했다. 대상 분봉은 다시 1건 존재했고, BTCUSDT의
 `(symbol, interval, open_time)` 중복 키 조회 결과는 0건이었다. 검증 후 ETL 컨테이너는
 운영 기본값 `RECONCILIATION_INTERVAL_SECONDS=300`으로 다시 생성했다.
+
+## 2026-08-02 — Restore R3: reconciliation 운영 관측
+
+### Implemented behavior
+
+- Dashboard와 `/api/dashboard`에 심볼별 `reconciliation` 상태를 추가했다.
+- 각 항목은 최신 검사 상태·시각, 마지막 성공·실패 시각, 마지막 실패 오류, 최신 run 기준 연속
+  실패 횟수를 포함한다.
+- 연속 실패는 최신 run이 `FAILED`인 경우에만 마지막 `SUCCESS` 이후의 `FAILED` run 수를 표시한다.
+  `RUNNING` 상태 또는 과거에만 실패가 있는 경우에는 0으로 표시해 현재 실패 추세와 구분한다.
+- `/health`는 Web의 PostgreSQL·Redis 의존성 확인으로 유지하고, ETL freshness는 ETL healthcheck,
+  복구 이력은 Dashboard API로 분리했다.
+
+### Executed checks
+
+- `ruff check .`: pass
+- `pytest -q`: 13 passed
+- `python -m compileall -q app alembic`: pass
+- `node --check app/web/static/dashboard.js`: pass
+- `docker compose up --build -d web`: pass
+- `/health`: `{"status":"ok"}`
+- `/api/dashboard`: BTCUSDT·ETHUSDT 모두 `reconciliation.latest_status = SUCCESS`,
+  `consecutive_failures = 0` 반환
+- `GET /`: 200, `Reconciliation watch` markup 포함
+- `GET /static/dashboard.js`: 200, reconciliation renderer 포함
+
+제어 가능한 브라우저 탭이 없어 카드의 실제 픽셀 렌더링은 자동 확인하지 못했다. 또한 실제
+Binance REST 장애를 격리해 `FAILED` run을 생성하는 장애 주입은 아직 수행하지 않았다. 다만
+실패 상태·연속 실패 표시 규칙은 단위 테스트로 검증했다.

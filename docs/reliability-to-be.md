@@ -90,15 +90,18 @@ Silent candle gap ────────┘             │
 
 ### 구현 방향
 
-- Dashboard에 “마지막 reconciliation”, “마지막 성공·실패”, “연속 실패 횟수”를 추가한다.
-- `/health`는 Web 의존성 확인과 별개로 ETL freshness를 표현할지 명확히 구분한다.
+- Dashboard와 `/api/dashboard`에 심볼별 “마지막 reconciliation”, “마지막 성공·실패”, “마지막 오류”,
+  “연속 실패 횟수”를 추가한다. `ingestion_runs`를 원천으로 사용하며 별도 상태 저장소는 만들지 않는다.
+- `/health`는 PostgreSQL·Redis에 대한 Web 의존성 확인으로 유지한다. ETL freshness와 reconciliation
+  상태는 Dashboard API 및 ETL 컨테이너 healthcheck에서 확인하도록 책임을 구분한다.
 - 외부 알림 채널은 아직 선택하지 않는다. 첫 구현은 상태 API·Docker logs·Dashboard 관측을
   확실히 하고, 이후 Slack/메일/모니터링 시스템 연동을 결정한다.
 
 ### 완료 검증
 
 - `STALE`, `FAILED`, 반복 `RECONNECTING`, Backfill 실패를 각각 재현했을 때 원인과 시각이
-  화면·API·로그에서 일관되게 확인된다.
+  화면·API·로그에서 일관되게 확인된다. — Dashboard/API 구현 완료, 실패 주입 시나리오 검증은
+  외부 Binance REST 장애를 격리할 수 있는 환경에서 후속 수행
 
 ## R4 — PostgreSQL backup and restore
 

@@ -8,6 +8,36 @@ function statusClass(status) {
     status === "RECONNECTING" || status === "STARTING" ? "warn" : "error";
 }
 
+function escapeHtml(value) {
+  return String(value).replace(/[&<>'"]/g, (character) => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", "\"": "&quot;",
+  })[character]);
+}
+
+function formatDateTime(value) {
+  return value ? new Date(value).toLocaleString() : "기록 없음";
+}
+
+function reconciliationMarkup(item) {
+  const hasFailures = item.consecutive_failures > 0;
+  const latestStatus = item.latest_status === "NOT_RUN" ? "대기" : item.latest_status;
+  const failureDetail = item.last_failure_at
+    ? `마지막 실패: ${formatDateTime(item.last_failure_at)}`
+    : "마지막 실패: 없음";
+  const error = item.last_failure_error
+    ? `<small class="reconciliation-error" title="${escapeHtml(item.last_failure_error)}">${escapeHtml(item.last_failure_error)}</small>`
+    : "";
+  return `
+    <article class="checkpoint-card reconciliation-card">
+      <div><span class="label">${item.symbol} · COMPLETED 1M</span><span class="badge ${statusClass(item.latest_status)}">${latestStatus}</span></div>
+      <strong>${hasFailures ? `연속 실패 ${item.consecutive_failures}` : "연속 실패 0"}</strong>
+      <small>마지막 검사: ${formatDateTime(item.latest_finished_at || item.latest_started_at)}</small>
+      <small>마지막 성공: ${formatDateTime(item.last_success_at)}</small>
+      <small>${failureDetail}</small>
+      ${error}
+    </article>`;
+}
+
 function marketMarkup(market) {
   return `
     <a class="market-card market-link" data-symbol="${market.symbol}" href="/markets/${market.symbol}" aria-label="${market.symbol} 상세 보기">
@@ -55,6 +85,10 @@ function render(data) {
     </article>`).join("") || '<p class="empty">Waiting for ETL checkpoints…</p>';
 
   renderMarkets(data.markets);
+
+  document.getElementById("reconciliation").innerHTML = data.reconciliation
+    .map(reconciliationMarkup)
+    .join("") || '<p class="empty">Waiting for reconciliation history…</p>';
 
   document.getElementById("runs").innerHTML = data.runs.map((run) => `
     <tr><td>${run.symbol}</td><td>${run.type}</td><td><span class="badge ${statusClass(run.status)}">${run.status}</span></td><td>${formatNumber.format(run.rows_processed)}</td><td>${run.started_at ? new Date(run.started_at).toLocaleString() : "-"}</td></tr>`).join("") || '<tr><td colspan="5" class="empty">No backfill runs yet.</td></tr>';
