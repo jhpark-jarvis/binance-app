@@ -35,7 +35,7 @@ Silent candle gap ────────┘             │
 | R0 | Done | AS-IS 기준선과 TO-BE 결정 기록 | 기준 commit·현재 보장·한계·다음 작업이 문서화됨 |
 | R1 | Highest | Compose 서비스 liveness | `web`, `postgres`, `redis` 종료 재기동 정책과 ETL health 관측을 검증 — 완료 |
 | R2 | Highest | 주기적 candle reconciliation | 연결이 유지된 상태의 인위적 1분봉 공백을 설정된 시간 안에 자동 복구 — 완료 |
-| R3 | High | 운영 상태·알림 | `STALE`/`FAILED`/반복 재연결/Backfill 실패를 운영자가 놓치지 않음 |
+| R3 | Done | 운영 상태·알림 | `STALE`/`FAILED`/반복 재연결/Backfill 실패를 Dashboard·API·로그에서 확인 — 완료 |
 | R4 | High | PostgreSQL backup/restore runbook | 백업본으로 별도 환경에 복원하고 데이터·schema를 검증 — 완료 |
 | R5 | Done | Aggregate Trade 복구 계약 | Trade 공백 허용, 완료 1분봉만 연속성·복구 대상 — 결정 완료 |
 
@@ -100,8 +100,9 @@ Silent candle gap ────────┘             │
 ### 완료 검증
 
 - `STALE`, `FAILED`, 반복 `RECONNECTING`, Backfill 실패를 각각 재현했을 때 원인과 시각이
-  화면·API·로그에서 일관되게 확인된다. — Dashboard/API 구현 완료, 실패 주입 시나리오 검증은
-  외부 Binance REST 장애를 격리할 수 있는 환경에서 후속 수행
+  화면·API·로그에서 일관되게 확인된다. — 완료. Docker의 별도 Compose project에서 연결 불가 REST
+  주소를 주입해 `BACKFILL FAILED`, checkpoint `RECONNECTING`, retry 로그와 Dashboard API의 동일
+  이력을 확인했다.
 
 ## R4 — PostgreSQL backup and restore
 
@@ -152,5 +153,5 @@ ETL 또는 WebSocket 장애 시간의 Trade 공백은 허용한다. 재시작·�
 
 ## Next implementation recommendation
 
-R1·R2·R4·R5가 완료됐다. 남은 검증 항목은 R3의 실제 Binance REST 장애 주입이다. 외부 API 장애를
-격리할 수 있는 환경에서 `FAILED` run, 재시도, Dashboard·API·로그의 상태 일치 여부를 확인한다.
+R1부터 R5까지 완료됐다. 이후 개선은 외부 알림 채널(Slack·메일·모니터링), 다중 ETL 리더, 또는
+체결 단위 완전성이 필요한 경우의 Aggregate Trade Backfill을 별도 요구사항으로 결정한 뒤 진행한다.

@@ -167,7 +167,7 @@ PostgreSQL의 실제 1분봉을 native Canvas로 그리며, `1h`, `6h`, `24h`, `
 - 주기 검사마다 `RECONCILIATION` run을 남긴다. 공백이 없으면 0행 `SUCCESS`, 복구가 발생하면
   실제 upsert 행 수가 기록된다.
 
-### Executed checks
+### Code-level validation
 
 - `ruff check .`: pass
 - `pytest -q`: 11 passed
@@ -261,6 +261,15 @@ Binance REST 장애를 격리해 `FAILED` run을 생성하는 장애 주입은 �
 - 실패하는 Kline client를 Collector의 Backfill 경로에 주입해, `RECONCILIATION` run이 `FAILED`,
   처리 행 수 `0`, 오류 메시지 기록으로 마감되고 `KLINE_1M` checkpoint도 `FAILED`로 기록되는지 확인했다.
 
-Docker Desktop 엔진이 중지된 상태여서 실제 Binance URL을 차단하는 격리 Compose 검증은 수행하지 못했다.
-따라서 R3 상태는 `구현·기본 검증 완료`로 유지하며, Docker 기동 뒤의 외부 연동 장애 주입은 별도 증적으로
-추가한다.
+### Docker integration fault injection
+
+- 운영 `binance-app`과 다른 `binance-r3verify` Compose project와 별도 PostgreSQL·Redis named
+  volume을 기동했다.
+- 그 프로젝트의 ETL에만 `BINANCE_REST_URL=http://127.0.0.1:9`를 주입했다. 실제 Binance Kline
+  Backfill은 연결 실패를 5회 재시도한 뒤 `BACKFILL FAILED`, 처리 행 수 `0`,
+  `All connection attempts failed` 오류로 기록됐다.
+- ETL은 예외를 종료로 처리하지 않고 `RECONNECTING` checkpoint와 reconnect count `1`을 기록한 뒤
+  다음 Backfill을 재시도했다. `/api/dashboard`는 같은 실패 run, 오류 메시지와 checkpoint 상태를 반환했고,
+  격리 Web의 `/health`는 `ok`였다.
+- 검증 후 `binance-r3verify` 컨테이너·network·두 named volume을 제거했다. 운영 `binance-app`의
+  `postgres`, `redis`, `etl`, `web`은 모두 healthy 상태를 유지했다.
