@@ -49,7 +49,7 @@ ETL 시작 또는 Binance WebSocket 종료
 | Redis AOF 손상 | 자동 수리 없음 | Redis volume 백업 후 `redis-check-aof --fix`; PostgreSQL volume은 건드리지 않음 |
 | Docker Desktop·호스트 중단 | Compose 서비스의 전체 기동 보장 없음 | Docker 복구 뒤 `docker compose up -d`, migration·ETL·Web 상태 확인 |
 | 연결은 유지되지만 특정 완료 1분봉만 조용히 누락 | 주기적 reconciliation 없음 | ETL 재시작 또는 연결 재수립 뒤 Backfill 수행 |
-| 장애 시간의 Aggregate Trade 공백 | Trade Backfill 미구현 | 현재는 공백을 복원하지 않음 |
+| 장애 시간의 Aggregate Trade 공백 | 복구 대상 아님 | 공백을 허용하며, 완료 1분봉의 Backfill·coverage로 복구 상태를 판단 |
 
 ## 현재 복구 절차
 

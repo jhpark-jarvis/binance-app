@@ -37,7 +37,7 @@ Silent candle gap ────────┘             │
 | R2 | Highest | 주기적 candle reconciliation | 연결이 유지된 상태의 인위적 1분봉 공백을 설정된 시간 안에 자동 복구 — 완료 |
 | R3 | High | 운영 상태·알림 | `STALE`/`FAILED`/반복 재연결/Backfill 실패를 운영자가 놓치지 않음 |
 | R4 | High | PostgreSQL backup/restore runbook | 백업본으로 별도 환경에 복원하고 데이터·schema를 검증 — 완료 |
-| R5 | Decision | Aggregate Trade 복구 계약 | Trade 공백을 허용할지, REST Backfill 범위를 도입할지 결정 |
+| R5 | Done | Aggregate Trade 복구 계약 | Trade 공백 허용, 완료 1분봉만 연속성·복구 대상 — 결정 완료 |
 
 ## R1 — 서비스 liveness
 
@@ -119,14 +119,28 @@ Silent candle gap ────────┘             │
 
 ## R5 — Aggregate Trade contract decision
 
-현재 `aggregate_trades`는 실시간 최근 체결 표시용이다. 다음 중 하나를 명시적으로 선택한다.
+### 선택한 정책
 
-| Option | Effect |
-|---|---|
-| 현재 정책 유지 | 장애 시간의 Trade 공백을 허용하고, 완료 1분봉만 연속성 보장 |
-| Trade Backfill 도입 | Binance Aggregate Trade REST 조회의 시간·ID 범위, rate limit, 대량 적재 정책을 추가 설계 |
+현재 정책을 유지한다. `aggregate_trades`는 최근 체결·taker flow를 보여 주는 실시간 보조 데이터이며,
+ETL 또는 WebSocket 장애 시간의 Trade 공백은 허용한다. 재시작·재연결·주기 reconciliation은 완료된
+1분봉만 검사하고 Backfill한다.
 
-R5를 결정하기 전에는 Trade 행 수를 캔들 연속성의 완료 기준으로 사용하지 않는다.
+- `(symbol, aggregate_trade_id)` PK는 중복 적재 방지용 identity이지, Trade ID 또는 시간축의
+  무공백 완전성을 증명하는 기준이 아니다.
+- Dashboard의 최근 체결 수나 갱신 여부는 스트림 관측 지표일 뿐, 복구 성공·실패 판정에는 사용하지 않는다.
+- Aggregate Trade REST Backfill은 ETL 시작, 재연결, reconciliation 경로에 호출하지 않는다.
+
+### 선택 근거
+
+완료 1분봉은 Binance Kline REST에서 시간 범위를 지정해 재조회하고 coverage를 재검증할 수 있어
+과제의 복구 계약에 적합하다. 반면 Aggregate Trade Backfill은 시간·ID 경계, 페이지 순회, API 제한,
+대량 적재와 보관 정책을 별도로 설계해야 한다. 현재 과제의 최근 체결 표시와 운영 대시보드 목적에는
+그 복잡도보다 완료 1분봉의 연속성 보장이 우선이다.
+
+### 재검토 조건
+
+체결 단위의 감사·포렌식, 체결 기반 전략 분석, 또는 Trade 공백 자체를 장애 기준으로 삼아야 하는
+요구가 생기면 Aggregate Trade REST Backfill의 범위·페이지네이션·rate limit·보관 기간을 별도 설계한다.
 
 ## Implementation rules
 
@@ -138,7 +152,5 @@ R5를 결정하기 전에는 Trade 행 수를 캔들 연속성의 완료 기준�
 
 ## Next implementation recommendation
 
-R1·R2·R4가 완료됐으므로 다음 작업은 **R5 Aggregate Trade 복구 계약 결정**이다. 장애 시간의
-Trade 공백을 허용하고 완료 1분봉만 연속성 기준으로 유지할지, Aggregate Trade REST Backfill의
-범위·rate limit·대량 적재 정책을 도입할지 명시적으로 선택한다. R3의 실제 Binance REST 장애
-주입 검증도 격리 가능한 환경에서 병행한다.
+R1·R2·R4·R5가 완료됐다. 남은 검증 항목은 R3의 실제 Binance REST 장애 주입이다. 외부 API 장애를
+격리할 수 있는 환경에서 `FAILED` run, 재시도, Dashboard·API·로그의 상태 일치 여부를 확인한다.

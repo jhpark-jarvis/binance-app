@@ -342,6 +342,7 @@ PostgreSQL volume에 restore하지 않습니다.** 실제 운영 복원은 먼�
 | 연결은 유지되지만 완료 분봉 누락 | 다음 reconciliation 주기에 coverage 검사·Backfill·재검증 | `RECONCILIATION SUCCESS`, 누락 0, 중복 키 0 |
 | Web·PostgreSQL·Redis 프로세스 종료 | Compose restart policy로 재기동 | `/health`, `docker compose ps`, ETL healthcheck |
 | Redis AOF 손상 | 자동 수리하지 않음 | 아래 Redis AOF 복구 절차 수행 |
+| Aggregate Trade 공백 | 자동 Backfill 대상 아님 | 최근 체결은 관측용으로만 보고, 완료 1분봉의 `missing / hr`와 reconciliation 결과로 복구 상태 판단 |
 
 ETL 상태를 터미널에서 확인하려면 다음 명령을 사용합니다. `unhealthy`는 checkpoint가 없거나,
 재연결/실패 상태이거나, 마지막 이벤트가 `ETL_HEALTH_MAX_EVENT_AGE_SECONDS`를 넘었다는 뜻입니다.
@@ -355,8 +356,8 @@ docker inspect --format '{{.State.Health.Status}}' "$(docker compose ps -q etl)"
 Windows PowerShell에서도 Docker 명령은 동일하게 동작합니다. PowerShell에서 마지막 명령이
 불편하면 `docker compose ps`의 `STATUS` 열과 `docker compose logs --tail 150 etl`만으로 확인해도 됩니다.
 
-실시간 Aggregate Trade는 최근 체결 흐름을 위해 저장하며, 시간축의 연속성·Backfill 완료 여부는
-1분봉으로 판정합니다.
+실시간 Aggregate Trade는 최근 체결 흐름을 위해 저장하는 보조 데이터입니다. 장애 시간의 Trade 공백은
+허용하며, 시간축의 연속성·Backfill 완료 여부는 완료된 1분봉으로만 판정합니다.
 
 ## 8. 개발·검증 명령
 

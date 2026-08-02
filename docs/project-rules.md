@@ -30,6 +30,8 @@ Binance Spot의 `BTCUSDT`, `ETHUSDT` 실시간 체결·시세를 수집하고, �
 3. 가격과 수량은 부동소수점이 아닌 decimal 정책으로 저장한다.
 4. 모든 DB 시간은 UTC이며, 이벤트 발생 시간과 시스템 수신 시간을 구분한다.
 5. PostgreSQL이 유일한 영속 원천이며 Redis는 복구 기준으로 사용하지 않는다.
+6. Aggregate Trade는 실시간 보조 데이터다. 장애 시간의 Trade 공백은 허용하며, 완료 1분봉만
+   연속성 검사와 Backfill의 대상이다.
 
 ## Operational rules
 

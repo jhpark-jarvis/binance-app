@@ -52,3 +52,12 @@ PostgreSQL volume을 곧바로 덮어쓰는 복원은 현재 상태와 복구 �
 
 실제 운영 volume 교체는 자동화하지 않는다. 데이터 손실 범위, 원본 보존, backup 보관 정책이 환경마다
 달라 별도 운영 승인 대상이기 때문이다.
+
+## AD-008: Aggregate Trade is real-time context, not a recovery continuity contract
+
+`aggregate_trades`의 `(symbol, aggregate_trade_id)`는 중복 적재를 막는 identity다. 이 키를 Trade
+시간축의 무공백 증명이나 장애 후 완전 복구 기준으로 사용하지 않는다. ETL·WebSocket 장애 시간의
+Aggregate Trade 공백은 허용하며, 시작·재연결·주기 reconciliation은 완료 1분봉만 Backfill·재검증한다.
+
+Aggregate Trade REST Backfill은 체결 단위 완전성 요구가 생길 때 별도 작업으로 도입한다. 그때는 시간과
+ID 경계, 페이지네이션, rate limit, 보관 기간 및 대량 적재 운영 비용을 함께 결정해야 한다.

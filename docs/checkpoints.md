@@ -25,7 +25,7 @@
 | R2 | Periodic reconciliation | 연결 유지 중 발생한 완료 1분봉 공백의 자동 발견·Backfill 검증 | 검증 완료 |
 | R3 | Observability | reconciliation 상태·실패 추세 Dashboard/API 노출 및 기본 통합 검증 | 구현·기본 검증 완료 |
 | R4 | PostgreSQL backup/restore | 별도 환경 복원과 schema·데이터 정합성 검증 | 검증 완료 |
-| R5 | Trade recovery decision | Aggregate Trade 공백 허용 또는 Backfill 정책 결정 | 대기 |
+| R5 | Trade recovery decision | Aggregate Trade 공백 허용, 완료 1분봉만 복구·연속성 기준으로 확정 | 결정 완료 |
 
 ## Mandatory end-to-end scenarios
 

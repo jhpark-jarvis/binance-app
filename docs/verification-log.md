@@ -236,3 +236,31 @@ Binance REST 장애를 격리해 `FAILED` run을 생성하는 장애 주입은 �
   `ingestion_checkpoints` 4 / `ingestion_runs` 224
 - duplicate completed-candle keys: 0
 - 검증 후 임시 restore volume이 남지 않았고, 원본 Compose 서비스는 모두 healthy 상태 유지
+
+## 2026-08-02 — Restore R5: Aggregate Trade recovery contract
+
+### Decision
+
+- `aggregate_trades`는 최근 체결·taker flow를 위한 실시간 보조 데이터로 유지한다.
+- ETL 또는 WebSocket 장애 시간의 Trade 공백은 허용한다. Aggregate Trade REST Backfill은 현재
+  시작·재연결·reconciliation 경로에 도입하지 않는다.
+- 완료 1분봉만 누락 검사·Backfill·재검증의 연속성 계약으로 유지한다.
+
+### Verification scope
+
+이번 단계는 데이터 계약 결정과 문서 정합성 갱신이므로 DB schema, 환경 변수, Docker 실행 경로를
+변경하지 않았다. Trade 행 수 또는 시간 간격을 복구 완료 조건으로 사용하지 않는 것을 README,
+운영 규칙, 지표 문서, AS-IS/TO-BE 문서에 일관되게 반영했다.
+
+## 2026-08-02 — Restore R3 follow-up: REST failure handling
+
+### Executed checks
+
+- HTTP mock transport로 Binance Kline REST의 503 응답을 주입해, 클라이언트가 총 5회 요청 후
+  `HTTPStatusError`를 반환하는지 확인했다. 테스트에서는 대기만 제거했고 운영 재시도 정책은 변경하지 않았다.
+- 실패하는 Kline client를 Collector의 Backfill 경로에 주입해, `RECONCILIATION` run이 `FAILED`,
+  처리 행 수 `0`, 오류 메시지 기록으로 마감되고 `KLINE_1M` checkpoint도 `FAILED`로 기록되는지 확인했다.
+
+Docker Desktop 엔진이 중지된 상태여서 실제 Binance URL을 차단하는 격리 Compose 검증은 수행하지 못했다.
+따라서 R3 상태는 `구현·기본 검증 완료`로 유지하며, Docker 기동 뒤의 외부 연동 장애 주입은 별도 증적으로
+추가한다.
